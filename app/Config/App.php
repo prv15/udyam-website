@@ -1,23 +1,24 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Config;
 
 class App
 {
+    public const NAME = 'Udyam Ventures';
+    public const VERSION = '1.0.0';
+    public const ENV = 'local';
 
-    public static function name(): string
+    // Automatically detect project folder
+    public static function basePath(): string
     {
-        return $_ENV['APP_NAME'];
+        return dirname(__DIR__, 2);
     }
 
-    public static function url(): string
+    public static function baseUrl(): string
     {
-        return rtrim($_ENV['APP_URL'], '/');
+        $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME']);
+        return rtrim(dirname($script), '/');
     }
-
-    public static function debug(): bool
-    {
-        return filter_var($_ENV['APP_DEBUG'], FILTER_VALIDATE_BOOLEAN);
-    }
-
 }
