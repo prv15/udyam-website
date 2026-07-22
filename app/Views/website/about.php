@@ -1,3 +1,7 @@
-<h1>About Udyam Ventures</h1>
+<h1><?= htmlspecialchars($page['title']) ?></h1>
 
-<p>This is the About page.</p>
+<div>
+
+<?= $page['content'] ?>
+
+</div>
