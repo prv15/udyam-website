@@ -2,6 +2,12 @@
     "name": "techpearlsolutions/udyamventures",
     "description": "Udyam Ventures Enterprise CMS",
     "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.1",
+        "phpmailer/phpmailer": "^6.10",
+        "vlucas/phpdotenv": "^5.6"
+    },
     "autoload": {
         "psr-4": {
             "App\\": "app/"
@@ -9,10 +15,12 @@
         "files": [
             "app/Helpers/functions.php",
             "app/Helpers/url.php",
-            "app/Helpers/assets.php"
+            "app/Helpers/assets.php",
+            "app/Helpers/menu.php"
         ]
     },
-    "require": {
-        "vlucas/phpdotenv": "^5.6"
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
     }
 }

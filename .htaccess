@@ -1,10 +1,25 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    RewriteBase /udyamventures/
+    # Never expose application internals through the web server.
+    RewriteRule ^(?:app|database|storage|vendor)(?:/|$) - [F,L,NC]
 
+    # Serve real assets and uploaded files directly. Route only virtual URLs
+    # through the application front controller.
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-
     RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+Options -Indexes
+
+<FilesMatch "^(\.env|composer\.(json|lock)|testing\.php)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
 </IfModule>

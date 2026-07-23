@@ -17,12 +17,13 @@ class Database
             return self::$connection;
         }
 
-       $host = $_ENV['DB_HOST'] ?? 'localhost';
-$port = $_ENV['DB_PORT'] ?? '3306';
-$database = $_ENV['DB_NAME'] ?? '';
-$username = $_ENV['DB_USER'] ?? '';
-$password = $_ENV['DB_PASS'] ?? '';
-$charset = 'utf8mb4';
+        $host = $_ENV['DB_HOST'] ?? '127.0.0.1';
+        $host = $host === 'localhost' ? '127.0.0.1' : $host;
+        $port = $_ENV['DB_PORT'] ?? '3306';
+        $database = $_ENV['DB_DATABASE'] ?? $_ENV['DB_NAME'] ?? '';
+        $username = $_ENV['DB_USERNAME'] ?? $_ENV['DB_USER'] ?? '';
+        $password = $_ENV['DB_PASSWORD'] ?? $_ENV['DB_PASS'] ?? '';
+        $charset = 'utf8mb4';
 
         $dsn = "mysql:host={$host};port={$port};dbname={$database};charset={$charset}";
 
@@ -40,8 +41,8 @@ $charset = 'utf8mb4';
             );
 
         } catch (PDOException $e) {
-
-            die("Database Connection Failed : " . $e->getMessage());
+            error_log('Database connection failed: ' . $e->getMessage());
+            throw new PDOException('Database connection could not be established.', 0, $e);
 
         }
 

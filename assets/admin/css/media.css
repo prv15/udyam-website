@@ -1,0 +1,149 @@
+/* ==========================================================
+   Media Library
+========================================================== */
+
+.media-page{
+    min-height:400px;
+}
+
+/* ==========================================================
+   Card
+========================================================== */
+
+.media-card{
+    border-radius:14px;
+    overflow:hidden;
+    transition:all .25s ease;
+}
+
+.media-card:hover{
+    transform:translateY(-4px);
+    box-shadow:0 .75rem 2rem rgba(0,0,0,.12)!important;
+}
+
+/* ==========================================================
+   Thumbnail
+========================================================== */
+
+.media-thumbnail{
+    position:relative;
+    height:180px;
+    background:#f8f9fa;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+}
+
+.media-thumbnail img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    transition:transform .3s ease;
+}
+
+.media-card:hover .media-thumbnail img{
+    transform:scale(1.04);
+}
+
+/* ==========================================================
+   File Icon
+========================================================== */
+
+.media-file-icon{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    height:100%;
+    font-size:64px;
+    color:#6c757d;
+}
+
+/* ==========================================================
+   Body
+========================================================== */
+
+.media-title{
+    font-size:.95rem;
+    font-weight:600;
+    margin-bottom:.5rem;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.media-card .small{
+    line-height:1.5;
+}
+
+/* ==========================================================
+   Footer
+========================================================== */
+
+.media-card .card-footer{
+    padding:.85rem 1rem;
+}
+
+.media-card .btn{
+    width:38px;
+    height:38px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+/* ==========================================================
+   Upload Modal
+========================================================== */
+
+#uploadMediaModal .modal-content{
+    border-radius:16px;
+}
+
+#uploadMediaModal textarea{
+    resize:vertical;
+}
+
+/* ==========================================================
+   Empty State
+========================================================== */
+
+.empty-media{
+    padding:80px 20px;
+    text-align:center;
+}
+
+.empty-media i{
+    font-size:72px;
+    color:#adb5bd;
+    margin-bottom:20px;
+}
+
+/* ==========================================================
+   Responsive
+========================================================== */
+
+@media (max-width:991px){
+
+    .media-thumbnail{
+        height:170px;
+    }
+
+}
+
+@media (max-width:767px){
+
+    .media-thumbnail{
+        height:160px;
+    }
+
+}
+
+@media (max-width:575px){
+
+    .media-thumbnail{
+        height:220px;
+    }
+
+}

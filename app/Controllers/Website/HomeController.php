@@ -9,20 +9,24 @@ use App\Services\HomeService;
 
 class HomeController extends Controller
 {
-    private HomeService $service;
-
-    public function __construct()
+    public function __construct(private readonly HomeService $home)
     {
-        $this->service = new HomeService();
     }
 
     public function index(): void
     {
-        $data = $this->service->getHomeData();
+        $content = $this->home->content();
+        if ($content !== null) {
+            $this->view('website/home-structured', array_merge($content, [
+                'title' => $content['page']['seo_title'] ?: $content['page']['title'],
+                'metaDescription' => $content['page']['seo_description'] ?: $content['page']['excerpt'],
+                'bodyClass' => 'udyam-home',
+            ]));
+            return;
+        }
 
         $this->view('website/home', [
-            'title' => 'Udyam Ventures',
-            'time'  => $data['serverTime']
+            'title' => 'Udyam Ventures'
         ]);
     }
 }

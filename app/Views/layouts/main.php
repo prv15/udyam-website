@@ -4,11 +4,15 @@
 
 <meta charset="UTF-8">
 
-<title><?= $title ?? 'Udyam Ventures'; ?></title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<?php if (!empty($metaDescription)): ?><meta name="description" content="<?= htmlspecialchars((string) $metaDescription, ENT_QUOTES, 'UTF-8') ?>"><?php endif; ?>
+<?php if (!empty($metaKeywords)): ?><meta name="keywords" content="<?= htmlspecialchars((string) $metaKeywords, ENT_QUOTES, 'UTF-8') ?>"><?php endif; ?>
+<title><?= htmlspecialchars((string) ($title ?? 'Udyam Ventures'), ENT_QUOTES, 'UTF-8'); ?></title>
+<link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/website/css/website.css'), ENT_QUOTES, 'UTF-8') ?>">
 
 </head>
 
-<body>
+<body class="<?= htmlspecialchars((string) ($bodyClass ?? ''), ENT_QUOTES, 'UTF-8') ?>">
 
 <?= $content ?>
 

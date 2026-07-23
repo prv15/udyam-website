@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Core;
 
+use App\Config\App as AppConfig;
+use Throwable;
+
 class Router
 {
     protected array $routes = [];
@@ -21,21 +24,24 @@ class Router
     private function addRoute(string $method, string $uri, array $action): void
     {
         $this->routes[$method][] = [
-            'uri' => $this->normalize($uri),
+            'uri'    => $this->normalize($uri),
             'action' => $action
         ];
     }
 
+    /**
+     * Dispatch Request
+     */
     public function dispatch(): void
     {
         $request = new Request();
 
         $method = $request->method();
-        $uri = $this->normalize($request->uri());
+        $uri    = $this->normalize($request->uri());
+
 
         if (!isset($this->routes[$method])) {
-            http_response_code(404);
-            View::render('errors/404');
+            $this->abort404();
             return;
         }
 
@@ -49,25 +55,66 @@ class Router
 
             $pattern = '#^' . $pattern . '$#';
 
-            if (preg_match($pattern, $uri, $matches)) {
-
-                array_shift($matches);
-
-                [$controller, $function] = $route['action'];
-
-                $instance = new $controller();
-
-                call_user_func_array([$instance, $function], $matches);
-
-                return;
+            if (!preg_match($pattern, $uri, $matches)) {
+                continue;
             }
+
+            array_shift($matches);
+
+            [$controller, $method] = $route['action'];
+
+            if (!class_exists($controller)) {
+                throw new \RuntimeException(
+                    "Controller {$controller} not found."
+                );
+            }
+
+            if (!method_exists($controller, $method)) {
+                throw new \RuntimeException(
+                    "Method {$method} does not exist in {$controller}."
+                );
+            }
+
+            try {
+
+                // Resolve Controller from DI Container
+                $instance = App::container()->get($controller);
+                $reflection = new \ReflectionMethod($instance, $method);
+                foreach ($reflection->getParameters() as $index => $parameter) {
+                    if (!array_key_exists($index, $matches)) {
+                        continue;
+                    }
+                    $type = $parameter->getType();
+                    if ($type instanceof \ReflectionNamedType && $type->getName() === 'int') {
+                        $matches[$index] = (int) $matches[$index];
+                    }
+                }
+
+                call_user_func_array(
+                    [$instance, $method],
+                    $matches
+                );
+
+            } catch (Throwable $e) {
+
+                if (AppConfig::debug()) {
+                    throw $e;
+                }
+
+                http_response_code(500);
+
+                View::render('errors/500');
+            }
+
+            return;
         }
 
-        http_response_code(404);
-
-        View::render('errors/404');
+        $this->abort404();
     }
 
+    /**
+     * Normalize URI
+     */
     private function normalize(string $uri): string
     {
         if ($uri === '/') {
@@ -75,5 +122,15 @@ class Router
         }
 
         return '/' . trim($uri, '/');
+    }
+
+    /**
+     * 404 Response
+     */
+    private function abort404(): void
+    {
+        http_response_code(404);
+
+        View::render('errors/404');
     }
 }

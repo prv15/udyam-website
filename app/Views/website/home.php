@@ -1,8 +1,3 @@
-<h1>Udyam Ventures Enterprise CMS</h1>
+<h1>Udyam Ventures</h1>
 
-<p>Database Connected Successfully</p>
-
-<p>
-Server Time:
-<strong><?= htmlspecialchars($time['server_time']) ?></strong>
-</p>
+<p>Building ventures. Creating lasting value.</p>

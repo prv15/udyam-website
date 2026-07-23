@@ -1,0 +1,121 @@
+.panel{
+    background:#fff;
+
+    border:1px solid #EAECF0;
+
+    border-radius:20px;
+
+    padding:28px;
+
+    box-shadow:0 2px 8px rgba(16,24,40,.04);
+}
+
+.panel-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:28px;
+}
+
+.badge{
+    padding:6px 12px;
+    border-radius:999px;
+    font-size:13px;
+    font-weight:600;
+}
+
+.empty-state{
+    text-align:center;
+    color:#98A2B3;
+    padding:60px 20px;
+}
+/*==========================================
+WIDGET HEADER
+==========================================*/
+
+.widget-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:28px;
+}
+
+.widget-title-group h3{
+    margin:0;
+    font-size:22px;
+    font-weight:600;
+    color:#101828;
+}
+
+.widget-title-group p{
+    margin:6px 0 0;
+    font-size:14px;
+    color:#667085;
+}
+
+.widget-actions{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+/*==========================================
+EMPTY STATE
+==========================================*/
+
+.empty-state{
+    padding:70px 40px;
+    text-align:center;
+}
+
+.empty-state i{
+    width:42px;
+    height:42px;
+    color:#98A2B3;
+    margin-bottom:20px;
+}
+
+.empty-state h4{
+    margin:0 0 10px;
+    font-size:20px;
+    font-weight:600;
+    color:#101828;
+}
+
+.empty-state p{
+    margin:0 0 25px;
+    color:#667085;
+}
+/*==========================================
+BADGES
+==========================================*/
+
+.badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:6px 12px;
+    border-radius:999px;
+    font-size:13px;
+    font-weight:500;
+    line-height:1;
+}
+
+.badge-success{
+    background:#ECFDF3;
+    color:#027A48;
+}
+
+.badge-warning{
+    background:#FFFAEB;
+    color:#B54708;
+}
+
+.badge-danger{
+    background:#FEF3F2;
+    color:#B42318;
+}
+
+.badge-info{
+    background:#EEF4FF;
+    color:#3538CD;
+}

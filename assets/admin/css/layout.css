@@ -1,0 +1,15 @@
+.main-wrapper{
+
+    margin-left:270px;
+
+    min-height:100vh;
+
+    background:var(--background);
+
+}
+
+.page-content{
+
+    padding:35px;
+
+}

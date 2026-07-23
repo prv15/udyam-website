@@ -22,6 +22,7 @@ class Application
         require dirname(__DIR__) . '/Routes/web.php';
         require dirname(__DIR__) . '/Routes/admin.php';
         require dirname(__DIR__) . '/Routes/api.php';
+        require dirname(__DIR__) . '/Routes/customer.php';
     }
 
     public function run(): void

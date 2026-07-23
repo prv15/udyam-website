@@ -12,4 +12,5 @@ return array(
     '887681207178e13ca3c68a162f1c695d' => $baseDir . '/app/Helpers/functions.php',
     'f966a13c9d784a658060bb2e8b73b27e' => $baseDir . '/app/Helpers/url.php',
     '49a053357fa356594d07d71aa6ed13b3' => $baseDir . '/app/Helpers/assets.php',
+    'f6c62540c3e22b8bbb8d9aab4f9b390e' => $baseDir . '/app/Helpers/menu.php',
 );

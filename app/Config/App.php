@@ -1,24 +1,28 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Config;
 
 class App
 {
-    public const NAME = 'Udyam Ventures';
-    public const VERSION = '1.0.0';
-    public const ENV = 'local';
+    public const NAME = 'Udyam CMS';
 
-    // Automatically detect project folder
-    public static function basePath(): string
+    public static function url(): string
     {
-        return dirname(__DIR__, 2);
+        return rtrim($_ENV['APP_URL'] ?? '', '/');
     }
 
-    public static function baseUrl(): string
+    public static function basePath(): string
     {
-        $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME']);
-        return rtrim(dirname($script), '/');
+        return rtrim($_ENV['APP_BASE_PATH'] ?? '', '/');
+    }
+
+    public static function timezone(): string
+    {
+        return $_ENV['APP_TIMEZONE'] ?? 'Asia/Kolkata';
+    }
+
+    public static function debug(): bool
+    {
+        return filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOL);
     }
 }

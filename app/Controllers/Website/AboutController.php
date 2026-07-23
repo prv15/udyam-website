@@ -20,6 +20,10 @@ class AboutController extends Controller
     {
         $page = $this->service->getPage('about');
 
+        if ($page === null) {
+            $this->abort404();
+        }
+
         $this->view(
             'website/about',
             [
