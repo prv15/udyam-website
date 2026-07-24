@@ -36,13 +36,15 @@ final class HomeService
             $data = $section['data'];
             foreach ($data as $key => $value) {
                 if (str_contains($key, 'image') || in_array($key, ['artwork', 'cover_image', 'logo'], true)) {
-                    $data[$key . '_url'] = $this->mediaUrl(is_numeric($value) ? (int) $value : 0);
+                    $data[$key . '_url'] = is_numeric($value)
+                        ? $this->mediaUrl((int) $value)
+                        : (is_string($value) ? upload_url($value) : null);
                 }
             }
-            $sections[$section['section_key']] = $data;
+            $sections[$section['section_key']] = resolve_upload_urls($data);
         }
 
-        return [
+        return resolve_upload_urls([
             'page' => $page,
             'sections' => $sections,
             'services' => $this->records->publishedForModule('services', $this->limit($sections, 'services', 6)),
@@ -50,7 +52,7 @@ final class HomeService
             'tenders' => $this->records->publishedForModule('tenders', $this->limit($sections, 'tenders', 5)),
             'partners' => $this->records->publishedForModule('partners', $this->limit($sections, 'partners', 10)),
             'insights' => $this->records->publishedForModule('blog', $this->limit($sections, 'knowledge_centre', 4)),
-        ];
+        ]);
     }
 
     private function limit(array $sections, string $key, int $default): int
