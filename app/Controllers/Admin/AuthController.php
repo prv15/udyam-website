@@ -25,6 +25,13 @@ class AuthController extends Controller
         $this->renderLogin();
     }
 
+    public function entry(): never
+    {
+        $user = Session::get('user');
+        header('Location: ' . url(is_array($user) && isset($user['id']) ? '/admin/dashboard' : '/admin/login'));
+        exit;
+    }
+
     public function authenticate(): void
     {
         (new GuestMiddleware())->handle();

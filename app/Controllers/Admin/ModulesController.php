@@ -21,6 +21,10 @@ final class ModulesController extends AdminController
     public function index(string $module): void
     {
         $definition = $this->definition($module);
+        if ($module === 'contact-messages') {
+            $this->records->updateStatuses('contact-messages', ['new', 'active'], 'in_progress');
+            $this->shared['unreadContactCount'] = 0;
+        }
         $page = max(1, $this->request->integer('page', 1));
         $search = $this->request->string('search');
         $this->render('modules/index', [

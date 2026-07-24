@@ -49,7 +49,7 @@
             returnFocus?.focus?.();
         }
     };
-    document.querySelectorAll('.site-cta,.mobile-consultation').forEach(button => button.addEventListener('click', event => {
+    document.querySelectorAll('.site-cta,.mobile-consultation,.consultation-trigger').forEach(button => button.addEventListener('click', event => {
         event.preventDefault();
         document.body.classList.remove('mobile-menu-open');
         document.querySelector('.mobile-navigation')?.classList.remove('is-open');

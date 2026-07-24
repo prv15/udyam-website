@@ -11,9 +11,8 @@ content="width=device-width, initial-scale=1.0">
 
 <title><?= htmlspecialchars((string) $title, ENT_QUOTES, 'UTF-8') ?></title>
 
-<link
-rel="stylesheet"
-href="<?= htmlspecialchars(url('/assets/admin/css/admin.css'), ENT_QUOTES, 'UTF-8') ?>">
+<?php $adminCssVersion = (string) (@filemtime(ASSET_PATH . '/admin/css/admin.css') ?: '1'); ?>
+<link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/admin/css/admin.css') . '?v=' . $adminCssVersion, ENT_QUOTES, 'UTF-8') ?>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
@@ -23,7 +22,7 @@ href="<?= htmlspecialchars(url('/assets/admin/css/admin.css'), ENT_QUOTES, 'UTF-
 
 </head>
 
-<body>
+<body class="admin-shell">
 
 <?php require __DIR__.'/../partials/sidebar.php'; ?>
 

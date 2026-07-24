@@ -4,6 +4,11 @@
     # Never expose application internals through the web server.
     RewriteRule ^(?:app|database|storage|vendor)(?:/|$) - [F,L,NC]
 
+    # These are application namespaces even though legacy empty directories
+    # with the same names exist in the document root. Route them through PHP
+    # before the real-directory exclusion below, including a trailing slash.
+    RewriteRule ^(?:admin|customer|api)(?:/.*)?$ index.php [QSA,L,NC]
+
     # Serve real assets and uploaded files directly. Route only virtual URLs
     # through the application front controller.
     RewriteCond %{REQUEST_FILENAME} !-f

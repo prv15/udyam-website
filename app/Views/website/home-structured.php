@@ -28,6 +28,17 @@ $audienceIcon = static function (string $name): string {
     $path = $paths[$name] ?? $paths['skills'];
     return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' . $path . '</svg>';
 };
+$impactIcon = static function (int $index): string {
+    $paths = [
+        '<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M13 15a5 5 0 0 1 8 4"/>',
+        '<circle cx="12" cy="12" r="9"/><path d="M8 7h8M8 10h8M9 7c3.8 0 5.5 1.1 5.5 3.2S12.8 14 9 14h-.5l6 5M8 14h2"/>',
+        '<path d="M4 21V8l8-5 8 5v13M2 21h20M8 21v-5h8v5M8 10h.01M12 10h.01M16 10h.01"/>',
+        '<path d="M12 21s7-5.1 7-12A7 7 0 0 0 5 9c0 6.9 7 12 7 12Z"/><circle cx="12" cy="9" r="2.3"/>',
+        '<path d="M4 20V10h16v10M7 10V7a5 5 0 0 1 10 0v3M8 14h8M12 10v10"/>',
+        '<path d="M8 21h8M10 17h4v4M7 3h10v4a5 5 0 0 1-10 0V3ZM7 5H4v2a4 4 0 0 0 4 4m9-6h3v2a4 4 0 0 1-4 4"/>',
+    ];
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round">' . ($paths[$index] ?? $paths[0]) . '</svg>';
+};
 $journeyIcon = static function (string $name): string {
     $paths = [
         'idea' => '<path d="M9 18h6m-5 3h4M8.5 14.5A7 7 0 1 1 15.5 14.5C14.5 15.3 14 16 14 18h-4c0-2-.5-2.7-1.5-3.5Z"/>',
@@ -236,7 +247,7 @@ $ecosystemIcon = static function (string $name): string {
         <div class="hero-capability-list">
             <?php foreach (($hero['capability_cards'] ?? []) as $index => $item): ?>
                 <article class="hero-capability-card capability-<?= (int) $index + 1 ?>">
-                    <span class="capability-icon"><?= htmlspecialchars($item['icon'] ?? '◇') ?></span>
+                    <span class="capability-icon"><?= htmlspecialchars(($item['icon'] ?? '◇') === '$' ? '₹' : ($item['icon'] ?? '◇')) ?></span>
                     <div><strong><?= htmlspecialchars($item['title'] ?? '') ?></strong><small><?= htmlspecialchars($item['description'] ?? '') ?></small></div>
                 </article>
             <?php endforeach; ?>
@@ -250,7 +261,7 @@ $ecosystemIcon = static function (string $name): string {
 </div>
 
 <?php if (!empty($stats['items'])): ?><section class="impact-strip">
-    <?php foreach ($stats['items'] as $item): ?><div><span><?= htmlspecialchars($item['icon'] ?? '◇') ?></span><strong><?= htmlspecialchars($item['value'] ?? '') ?></strong><small><?= htmlspecialchars($item['label'] ?? '') ?></small></div><?php endforeach; ?>
+    <?php foreach ($stats['items'] as $index => $item): ?><div><span><?= $impactIcon((int) $index) ?></span><strong><?= htmlspecialchars($item['value'] ?? '') ?></strong><small><?= htmlspecialchars($item['label'] ?? '') ?></small></div><?php endforeach; ?>
 </section><?php endif; ?>
 
 <?php if ($tenderSection): ?><section class="tenders-section" id="tenders">
@@ -311,7 +322,7 @@ $ecosystemIcon = static function (string $name): string {
 <?php if ($serviceSection): ?><section class="home-section services-section" id="services"><div class="service-heading"><span></span><h2><?= htmlspecialchars($serviceSection['heading'] ?? 'Our Core Services') ?></h2><span></span></div><div class="service-grid">
     <?php foreach ($services as $index => $item): ?><article class="service-card service-tone-<?= ($index % 4) + 1 ?>" tabindex="0">
         <div class="service-image"><?php if (!empty($item['image'])): ?><img src="<?= htmlspecialchars($item['image']) ?>" alt="<?= htmlspecialchars($item['title']) ?>"><?php endif; ?><span class="service-number"><?= str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT) ?></span></div>
-        <div class="service-card-body"><h3><span><?= htmlspecialchars($item['icon'] ?? '◇') ?></span><?= htmlspecialchars($item['title']) ?></h3><p><?= htmlspecialchars($item['summary'] ?? '') ?></p><a href="<?= htmlspecialchars(url('/services#' . ($item['slug'] ?? $item['id']))) ?>">Read More <span>→</span></a></div>
+        <div class="service-card-body"><h3><span><?= htmlspecialchars(($item['icon'] ?? '◇') === '$' ? '₹' : ($item['icon'] ?? '◇')) ?></span><?= htmlspecialchars($item['title']) ?></h3><p><?= htmlspecialchars($item['summary'] ?? '') ?></p><a href="<?= htmlspecialchars(url('/services#' . ($item['slug'] ?? $item['id']))) ?>">Read More <span>→</span></a></div>
     </article><?php endforeach; ?>
 </div></section><?php endif; ?>
 
@@ -325,7 +336,7 @@ $ecosystemIcon = static function (string $name): string {
 
 <?php if ($network): ?><section class="network-section" id="resource-center">
     <div class="section-heading"><small><?= htmlspecialchars($network['eyebrow'] ?? '') ?></small><h2><?= htmlspecialchars($network['heading'] ?? '') ?></h2><p><?= htmlspecialchars($network['description'] ?? '') ?></p></div>
-    <div class="network-grid"><?php foreach (($network['items'] ?? []) as $item): ?><article><span><?= htmlspecialchars($item['icon'] ?? '◇') ?></span><h3><?= htmlspecialchars($item['title'] ?? '') ?></h3><p><?= htmlspecialchars($item['description'] ?? '') ?></p></article><?php endforeach; ?></div>
+    <div class="network-grid"><?php foreach (($network['items'] ?? []) as $item): ?><article><span><?= htmlspecialchars(($item['icon'] ?? '◇') === '$' ? '₹' : ($item['icon'] ?? '◇')) ?></span><h3><?= htmlspecialchars($item['title'] ?? '') ?></h3><p><?= htmlspecialchars($item['description'] ?? '') ?></p></article><?php endforeach; ?></div>
     <div class="sector-spotlight"><div><small>Impact Ecosystem</small><h2><?= htmlspecialchars($network['featured_title'] ?? '') ?></h2><p><?= htmlspecialchars($network['featured_description'] ?? '') ?></p></div><div class="sector-stats"><?php foreach (($network['featured_stats'] ?? []) as $stat): ?><div><strong><?= htmlspecialchars($stat['value'] ?? '') ?></strong><span><?= htmlspecialchars($stat['label'] ?? '') ?></span></div><?php endforeach; ?></div></div>
 </section><?php endif; ?>
 
@@ -397,3 +408,4 @@ $ecosystemIcon = static function (string $name): string {
     </div>
 </footer>
 <?php endif; ?>
+<?php require __DIR__ . '/partials/scroll-reveal.php'; ?>

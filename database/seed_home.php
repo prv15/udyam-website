@@ -94,7 +94,7 @@ $defaults = [
         'capability_cards' => [
             ['title' => 'Knowledge', 'description' => 'Research-driven insights for better decisions.', 'icon' => '▥'],
             ['title' => 'Strategy', 'description' => 'Roadmap for growth and transformation.', 'icon' => '◎'],
-            ['title' => 'Funding', 'description' => 'Connecting opportunities with the right resources.', 'icon' => '$'],
+            ['title' => 'Funding', 'description' => 'Connecting opportunities with the right resources.', 'icon' => '₹'],
             ['title' => 'Execution', 'description' => 'End-to-end implementation support.', 'icon' => '⚙'],
             ['title' => 'Impact', 'description' => 'Measurable outcomes for a better tomorrow.', 'icon' => '↗'],
         ],

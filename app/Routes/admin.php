@@ -1,6 +1,10 @@
 <?php
 
 declare(strict_types=1);
+$router->get('/admin', [
+    \App\Controllers\Admin\AuthController::class,
+    'entry'
+]);
 $router->get('/admin/login', [
     \App\Controllers\Admin\AuthController::class,
     'login'

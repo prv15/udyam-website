@@ -44,6 +44,29 @@ final class AdminRecord extends Model
         return (int) $statement->fetchColumn();
     }
 
+    public function countByStatuses(string $module, array $statuses): int
+    {
+        if ($statuses === []) return 0;
+        $placeholders = implode(',', array_fill(0, count($statuses), '?'));
+        $statement = $this->db->prepare(
+            "SELECT COUNT(*) FROM admin_records
+             WHERE module = ? AND status IN ({$placeholders}) AND deleted_at IS NULL"
+        );
+        $statement->execute(array_merge([$module], array_values($statuses)));
+        return (int) $statement->fetchColumn();
+    }
+
+    public function updateStatuses(string $module, array $fromStatuses, string $toStatus): void
+    {
+        if ($fromStatuses === []) return;
+        $placeholders = implode(',', array_fill(0, count($fromStatuses), '?'));
+        $statement = $this->db->prepare(
+            "UPDATE admin_records SET status = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE module = ? AND status IN ({$placeholders}) AND deleted_at IS NULL"
+        );
+        $statement->execute(array_merge([$toStatus, $module], array_values($fromStatuses)));
+    }
+
     public function findForModule(string $module, int $id): ?array
     {
         $statement = $this->db->prepare(

@@ -37,3 +37,4 @@
     <div class="footer-bottom"><small><?= htmlspecialchars($footer['copyright']??'') ?></small><nav aria-label="Legal"><?php foreach(($footer['legal_links']??[]) as $link): ?><a href="<?= htmlspecialchars(url($link['url']??'#')) ?>"><?= htmlspecialchars($link['label']??'') ?></a><?php endforeach; ?></nav></div>
 </footer>
 <?php endif; ?>
+<?php require __DIR__ . '/scroll-reveal.php'; ?>

@@ -1,107 +1,112 @@
+<?php
+$loginCssVersion = (string) (@filemtime(ASSET_PATH . '/admin/css/login.css') ?: '1');
+?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <title>Admin Login</title>
-
-    <style>
-        *{
-            margin:0;
-            padding:0;
-            box-sizing:border-box;
-            font-family:Arial,sans-serif;
-        }
-
-        body{
-            background:#f5f7fb;
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            height:100vh;
-        }
-
-        .login-box{
-            width:400px;
-            background:#fff;
-            padding:35px;
-            border-radius:12px;
-            box-shadow:0 15px 40px rgba(0,0,0,.08);
-        }
-
-        h2{
-            margin-bottom:25px;
-            text-align:center;
-        }
-
-        input{
-            width:100%;
-            padding:12px;
-            margin-bottom:15px;
-            border:1px solid #ddd;
-            border-radius:8px;
-        }
-
-        button{
-            width:100%;
-            padding:12px;
-            background:#4f46e5;
-            color:#fff;
-            border:none;
-            border-radius:8px;
-            cursor:pointer;
-        }
-
-        button:hover{
-            background:#4338ca;
-        }
-
-        .error{
-            color:red;
-            margin-bottom:15px;
-        }
-    </style>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Secure Admin Login | Udyam Ventures</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="<?= htmlspecialchars(url('/assets/admin/css/login.css')) ?>?v=<?= rawurlencode($loginCssVersion) ?>">
+    <script src="https://unpkg.com/lucide@latest" defer></script>
 </head>
+<body class="login-page">
+    <main class="login-shell">
+        <section class="login-showcase" aria-label="Udyam Ventures enterprise platform">
+            <div class="showcase-glow showcase-glow-one"></div>
+            <div class="showcase-glow showcase-glow-two"></div>
 
-<body>
+            <a class="login-brand" href="<?= htmlspecialchars(url('/')) ?>">
+                <img src="<?= htmlspecialchars(url('/uploads/media/original/home/udyam-ventures-logo-cropped.png')) ?>" alt="Udyam Ventures">
+            </a>
 
-<div class="login-box">
+            <div class="showcase-content">
+                <span class="showcase-kicker"><i data-lucide="shield-check"></i> Enterprise Management Suite</span>
+                <h1>One secure workspace.<br><span>Complete operational control.</span></h1>
+                <p>Manage website content, customer journeys, enquiries, applications and publishing from one unified platform.</p>
 
-<h2>Admin Login</h2>
+                <div class="showcase-features">
+                    <div><i data-lucide="layout-dashboard"></i><span><strong>Unified CMS</strong><small>Every website module in one place</small></span></div>
+                    <div><i data-lucide="users-round"></i><span><strong>Customer Operations</strong><small>Applications, documents and updates</small></span></div>
+                    <div><i data-lucide="activity"></i><span><strong>Live Intelligence</strong><small>Enquiries and activity at a glance</small></span></div>
+                </div>
+            </div>
 
-<?php if(!empty($error)): ?>
+            <p class="showcase-footer">Protected access · Udyam Ventures</p>
+        </section>
 
-<div class="error">
-<?= htmlspecialchars($error) ?>
-</div>
+        <section class="login-form-side">
+            <div class="mobile-brand">
+                <img src="<?= htmlspecialchars(url('/uploads/media/original/home/udyam-ventures-logo-cropped.png')) ?>" alt="Udyam Ventures">
+            </div>
 
-<?php endif; ?>
+            <div class="login-card">
+                <div class="login-card-heading">
+                    <span class="secure-mark"><i data-lucide="lock-keyhole"></i></span>
+                    <div>
+                        <p class="eyebrow">Administrator portal</p>
+                        <h2>Welcome back</h2>
+                        <p>Sign in to continue to your secure workspace.</p>
+                    </div>
+                </div>
 
-<form method="post" action="<?= htmlspecialchars(url('/admin/login')) ?>">
+                <?php if (!empty($error)): ?>
+                    <div class="login-alert" role="alert">
+                        <i data-lucide="circle-alert"></i>
+                        <span><?= htmlspecialchars($error) ?></span>
+                    </div>
+                <?php endif; ?>
 
-<?= csrf_field() ?>
+                <form method="post" action="<?= htmlspecialchars(url('/admin/login')) ?>" class="login-form">
+                    <?= csrf_field() ?>
 
-<input
-type="email"
-name="email"
-placeholder="Email"
-required>
+                    <label for="email">Work email</label>
+                    <div class="login-input">
+                        <i data-lucide="mail"></i>
+                        <input id="email" type="email" name="email" value="<?= htmlspecialchars((string) ($_POST['email'] ?? '')) ?>" placeholder="name@udyamventures.com" autocomplete="username" required autofocus>
+                    </div>
 
-<input
-type="password"
-name="password"
-placeholder="Password"
-required>
+                    <div class="password-label">
+                        <label for="password">Password</label>
+                    </div>
+                    <div class="login-input">
+                        <i data-lucide="key-round"></i>
+                        <input id="password" type="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
+                        <button class="password-toggle" type="button" aria-label="Show password" aria-pressed="false">
+                            <i data-lucide="eye"></i>
+                        </button>
+                    </div>
 
-<button type="submit">
-Login
-</button>
+                    <button class="login-submit" type="submit">
+                        <span>Sign in securely</span>
+                        <i data-lucide="arrow-right"></i>
+                    </button>
+                </form>
 
-</form>
+                <p class="login-support"><i data-lucide="shield"></i> Authorised administrators only. Access is monitored and protected.</p>
+            </div>
+        </section>
+    </main>
 
-</div>
-
+    <script>
+        window.addEventListener('DOMContentLoaded', function () {
+            if (window.lucide) window.lucide.createIcons();
+            var toggle = document.querySelector('.password-toggle');
+            var password = document.getElementById('password');
+            if (!toggle || !password) return;
+            toggle.addEventListener('click', function () {
+                var reveal = password.type === 'password';
+                password.type = reveal ? 'text' : 'password';
+                toggle.setAttribute('aria-pressed', reveal ? 'true' : 'false');
+                toggle.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
+                toggle.innerHTML = '<i data-lucide="' + (reveal ? 'eye-off' : 'eye') + '"></i>';
+                if (window.lucide) window.lucide.createIcons();
+            });
+        });
+    </script>
 </body>
-
 </html>

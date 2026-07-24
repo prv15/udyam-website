@@ -44,6 +44,45 @@ return [
                     ]],
                 ],
             ],
+            'profile_statements' => [
+                'label' => 'Vision, Mission & Philosophy',
+                'description' => 'Premium statement cards used for institutional vision, mission, philosophy or guiding principles.',
+                'fields' => [
+                    'eyebrow' => ['label' => 'Eyebrow', 'type' => 'text'],
+                    'heading' => ['label' => 'Section Heading', 'type' => 'text'],
+                    'description' => ['label' => 'Section Description', 'type' => 'textarea'],
+                    'items' => ['label' => 'Statement Cards', 'type' => 'repeater', 'fields' => [
+                        'title' => 'Title', 'content' => 'Content', 'icon' => 'Icon / Symbol',
+                    ]],
+                ],
+            ],
+            'expertise_grid' => [
+                'label' => 'Areas of Expertise',
+                'description' => 'Detailed service and expertise cards with premium numbered presentation.',
+                'fields' => [
+                    'eyebrow' => ['label' => 'Eyebrow', 'type' => 'text'],
+                    'heading' => ['label' => 'Section Heading', 'type' => 'text'],
+                    'description' => ['label' => 'Section Description', 'type' => 'textarea'],
+                    'items' => ['label' => 'Expertise Cards', 'type' => 'repeater', 'fields' => [
+                        'title' => 'Title', 'description' => 'Description', 'icon' => 'Icon / Symbol',
+                    ]],
+                ],
+            ],
+            'contact_details' => [
+                'label' => 'Offices & Contact Details',
+                'description' => 'Office addresses, Google Maps locations, phone numbers and email addresses.',
+                'fields' => [
+                    'eyebrow' => ['label' => 'Eyebrow', 'type' => 'text'],
+                    'heading' => ['label' => 'Section Heading', 'type' => 'text'],
+                    'description' => ['label' => 'Section Description', 'type' => 'textarea'],
+                    'offices' => ['label' => 'Office Locations', 'type' => 'repeater', 'fields' => [
+                        'title' => 'Office Title', 'address' => 'Full Address', 'map_query' => 'Google Maps Search Query',
+                    ]],
+                    'contact_lines' => ['label' => 'Contact Information', 'type' => 'repeater', 'fields' => [
+                        'type' => 'Type (phone/email)', 'label' => 'Display Label', 'value' => 'Value', 'url' => 'Link URL',
+                    ]],
+                ],
+            ],
             'page_stats' => [
                 'label' => 'Statistics',
                 'description' => 'Optional impact statistics.',

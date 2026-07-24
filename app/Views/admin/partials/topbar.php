@@ -36,19 +36,20 @@
 
     <div class="topbar-right">
 
-        <button class="quick-btn">
+        <a class="quick-btn" href="<?= htmlspecialchars(url('/admin/pages/create')) ?>">
 
             <i data-lucide="plus"></i>
 
             <span>New</span>
 
-        </button>
+        </a>
 
-        <button class="icon-btn">
+        <a class="icon-btn notification-button<?= ($unreadContactCount ?? 0) > 0 ? ' has-notifications' : '' ?>" href="<?= htmlspecialchars(url('/admin/contact-messages')) ?>" aria-label="<?= (int) ($unreadContactCount ?? 0) ?> unread contact messages">
 
             <i data-lucide="bell"></i>
+            <?php if (($unreadContactCount ?? 0) > 0): ?><span class="notification-count"><?= min(99, (int) $unreadContactCount) ?></span><?php endif; ?>
 
-        </button>
+        </a>
 
         <button class="icon-btn">
 

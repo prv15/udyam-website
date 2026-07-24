@@ -8,6 +8,7 @@ use App\Core\Controller;
 use App\Core\Request;
 use App\Models\AdminRecord;
 use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception as MailerException;
 use Throwable;
 
 final class ConsultationController extends Controller
@@ -75,7 +76,7 @@ final class ConsultationController extends Controller
             'module' => 'contact-messages',
             'title' => $name,
             'slug' => 'consultation-' . date('Ymd-His') . '-' . bin2hex(random_bytes(3)),
-            'status' => 'active',
+            'status' => 'new',
             'sort_order' => 0,
             'data' => json_encode($details, JSON_THROW_ON_ERROR),
         ]);
@@ -127,6 +128,18 @@ final class ConsultationController extends Controller
         }
         $mail->Body = '<div style="margin:0;background:#f2f5fb;padding:34px 14px;font-family:Arial,sans-serif"><div style="max-width:650px;margin:auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 18px 48px rgba(7,24,75,.12)"><div style="padding:30px 34px;background:linear-gradient(135deg,#071b51,#3b2abb);color:#fff"><div style="font-size:12px;letter-spacing:2px;color:#f0b743;text-transform:uppercase">Udyam Ventures</div><h1 style="margin:10px 0 5px;font-family:Georgia,serif;font-size:30px">New consultation request</h1><p style="margin:0;color:#dce4ff;font-size:14px">A prospective client submitted the website consultation form.</p></div><div style="padding:26px 34px"><table style="width:100%;border-collapse:collapse">' . $rowHtml . '</table><div style="margin-top:20px;padding:20px;border-radius:14px;background:#f5f7fc;border-left:4px solid #6243d6"><div style="margin-bottom:8px;color:#73809d;font-size:12px;text-transform:uppercase;letter-spacing:1px">Project requirement</div><div style="color:#1d2947;font-size:14px;line-height:1.7">' . nl2br($escape($details['message'])) . '</div></div><p style="margin:24px 0 0;color:#8791a8;font-size:12px">Reply directly to this email to contact ' . $escape($details['title']) . '.</p></div></div></div>';
         $mail->AltBody = "New consultation request\n\n" . strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $details['message']));
-        $mail->send();
+        try {
+            $mail->send();
+        } catch (MailerException $smtpException) {
+            if (!filter_var($_ENV['SMTP_FALLBACK_MAIL'] ?? true, FILTER_VALIDATE_BOOLEAN)) {
+                throw $smtpException;
+            }
+
+            error_log('Consultation SMTP failed; trying DirectAdmin mail transport: ' . $smtpException->getMessage());
+            $fallback = clone $mail;
+            $fallback->isMail();
+            $fallback->SMTPAuth = false;
+            $fallback->send();
+        }
     }
 }

@@ -21,7 +21,7 @@ final class DashboardService
             'customers' => $this->moduleCount('customers'),
             'media' => $this->count('SELECT COUNT(*) FROM media WHERE deleted_at IS NULL'),
             'pendingApplications' => $this->moduleCount('applications', 'draft'),
-            'newMessages' => $this->moduleCount('contact-messages', 'active'),
+            'newMessages' => $this->moduleCountByStatuses('contact-messages', ['new', 'active']),
         ];
     }
 
@@ -97,6 +97,23 @@ final class DashboardService
         }
         $statement = $this->db->prepare($sql);
         $statement->execute($params);
+        return (int) $statement->fetchColumn();
+    }
+
+    private function moduleCountByStatuses(string $module, array $statuses): int
+    {
+        $statuses = array_values(array_filter($statuses, 'is_string'));
+        if ($statuses === []) {
+            return 0;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($statuses), '?'));
+        $statement = $this->db->prepare(
+            "SELECT COUNT(*) FROM admin_records
+             WHERE module = ? AND deleted_at IS NULL AND status IN ({$placeholders})"
+        );
+        $statement->execute(array_merge([$module], $statuses));
+
         return (int) $statement->fetchColumn();
     }
 

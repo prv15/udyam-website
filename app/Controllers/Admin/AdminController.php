@@ -7,6 +7,7 @@ namespace App\Controllers\Admin;
 use App\Core\Controller;
 use App\Core\Session;
 use App\Middleware\AuthMiddleware;
+use App\Models\AdminRecord;
 
 abstract class AdminController extends Controller
 {
@@ -23,6 +24,8 @@ abstract class AdminController extends Controller
             'user' => Session::get('user'),
 
             'adminMenu' => require CONFIG_PATH . '/admin-menu.php',
+
+            'unreadContactCount' => (new AdminRecord())->countByStatuses('contact-messages', ['new', 'active']),
 
         ];
     }
