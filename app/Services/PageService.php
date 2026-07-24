@@ -35,7 +35,7 @@ class PageService extends Service
                 $page['featured_image_url'] = media_url($image);
             }
         }
-        return $page;
+        return resolve_upload_urls($page);
     }
 
     public function sections(int $pageId): array
@@ -50,7 +50,7 @@ class PageService extends Service
                     $data[$key . '_url'] = $media ? media_url($media) : null;
                 }
             }
-            $result[$section['section_key']] = $data;
+            $result[$section['section_key']] = resolve_upload_urls($data);
         }
         return $result;
     }
@@ -75,7 +75,7 @@ class PageService extends Service
                     $data[$field . '_url'] = $media ? media_url($media) : null;
                 }
             }
-            $chrome[$key] = $data;
+            $chrome[$key] = resolve_upload_urls($data);
         }
         return $chrome;
     }
