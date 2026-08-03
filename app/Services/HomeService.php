@@ -8,6 +8,8 @@ use App\Models\AdminRecord;
 use App\Models\Media;
 use App\Models\Page;
 use App\Models\PageSection;
+use App\Core\Session;
+use App\Config\Database;
 
 final class HomeService
 {
@@ -42,6 +44,16 @@ final class HomeService
             $sections[$section['section_key']] = $data;
         }
 
+        $viewer = Session::get('user', []);
+        $hasTenderAccess = false;
+        if (is_array($viewer) && ($viewer['user_type'] ?? '') === 'customer' && !empty($viewer['id'])) {
+            $statement = Database::connection()->prepare(
+                "SELECT 1 FROM customer_subscriptions WHERE customer_id = ? AND status = 'active' AND (expires_at IS NULL OR expires_at >= CURDATE()) LIMIT 1"
+            );
+            $statement->execute([(int) $viewer['id']]);
+            $hasTenderAccess = $statement->fetchColumn() !== false;
+        }
+
         return [
             'page' => $page,
             'sections' => $sections,
@@ -50,6 +62,8 @@ final class HomeService
             'tenders' => $this->records->publishedForModule('tenders', $this->limit($sections, 'tenders', 5)),
             'partners' => $this->records->publishedForModule('partners', $this->limit($sections, 'partners', 10)),
             'insights' => $this->records->publishedForModule('blog', $this->limit($sections, 'knowledge_centre', 4)),
+            'hasTenderAccess' => $hasTenderAccess,
+            'subscriptionPlans' => Database::connection()->query("SELECT * FROM subscription_plans WHERE status='active' AND deleted_at IS NULL ORDER BY sort_order, name LIMIT 3")->fetchAll(),
         ];
     }
 

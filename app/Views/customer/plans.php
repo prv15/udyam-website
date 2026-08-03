@@ -1,0 +1,17 @@
+<section class="funding-plan-hero">
+    <div><span>Udyam's Project Funding Membership</span><h2>Build a stronger organization profile. Discover the right opportunities.</h2><p>Weekly project intelligence, priority funding alerts, practical toolkits, expert webinars and guidance - without promises of guaranteed sanction.</p></div>
+    <div class="funding-hero-points"><span><i data-lucide="shield-alert"></i>Avoid risky guarantees</span><span><i data-lucide="landmark"></i>Build institutional readiness</span><span><i data-lucide="trending-up"></i>110+ crore opportunities monthly</span></div>
+</section>
+<div class="section-heading plan-section-heading"><div><span>Choose your membership</span><h2>Plans designed around how you want to grow.</h2><p>All prices shown below are GST-inclusive where indicated. Checkout is secured through PayYantra.</p></div></div>
+<div class="funding-plan-grid"><?php foreach($plans as $plan): $benefits=json_decode($plan['benefits']??'[]',true)?:[]; $featured=!empty($plan['featured']);?><article class="funding-plan-card <?=$featured?'featured':''?>">
+    <?php if(!empty($plan['badge'])):?><b class="plan-badge"><?=htmlspecialchars($plan['badge'])?></b><?php endif;?>
+    <header><small><?=htmlspecialchars($plan['subtitle']??str_replace('_',' ',$plan['billing_cycle']))?></small><h3><?=htmlspecialchars($plan['name'])?></h3><p><?=htmlspecialchars($plan['description']??'')?></p></header>
+    <div class="funding-price"><span>₹</span><strong><?=number_format((float)($plan['initial_payment']?:$plan['price']),0)?></strong><small><?=$plan['billing_cycle']==='monthly'?'/ month':'pay now'?></small></div>
+    <?php if(!empty($plan['followup_payment'])):?><div class="instalment-line"><i data-lucide="calendar-clock"></i><span>+ ₹<?=number_format((float)$plan['followup_payment'],0)?> after <?=intval($plan['followup_due_days'])?> days</span></div><?php endif;?>
+    <?php if(!empty($plan['highlight_text'])):?><div class="plan-highlight"><?=htmlspecialchars($plan['highlight_text'])?></div><?php endif;?>
+    <ul><?php foreach($benefits as $benefit):?><li><i data-lucide="circle-check-big"></i><span><strong><?=htmlspecialchars(is_array($benefit)?($benefit['title']??''):$benefit)?></strong><?php if(is_array($benefit)&&!empty($benefit['description'])):?><small><?=htmlspecialchars($benefit['description'])?></small><?php endif;?></span></li><?php endforeach;?></ul>
+    <?php if(!empty($plan['ideal_for'])):?><p class="ideal-for"><i data-lucide="lightbulb"></i><?=htmlspecialchars($plan['ideal_for'])?></p><?php endif;?>
+    <form method="post" action="<?=htmlspecialchars(url('/customer/plans/'.$plan['id'].'/subscribe'))?>"><?=csrf_field()?><button class="primary-action">Pay securely with PayYantra <i data-lucide="arrow-up-right"></i></button></form>
+    <small class="gst-note"><i data-lucide="receipt-indian-rupee"></i><?=$plan['gst_inclusive']?'Price includes applicable GST':'GST is calculated at checkout'?></small>
+</article><?php endforeach;?><?php if(!$plans):?><div class="portal-card empty">Subscription plans will appear here when published by Udyam.</div><?php endif;?></div>
+<section class="plan-assurance"><i data-lucide="badge-check"></i><div><strong>Opportunity intelligence, not risky promises.</strong><p>Udyam helps organizations discover, prepare for and pursue relevant funding opportunities. Project sanction always remains subject to the funder's evaluation.</p></div></section>

@@ -20,6 +20,11 @@ class DashboardController extends AdminController
             [
                 'title' => 'Dashboard',
                 'stats' => $this->dashboard->summary(),
+                'business' => $this->dashboard->businessInsights(),
+                'revenueTrend' => $this->dashboard->revenueTrend(),
+                'subscriptionMix' => $this->dashboard->subscriptionMix(),
+                'applicationPipeline' => $this->dashboard->applicationPipeline(),
+                'latestCustomers' => $this->dashboard->latestCustomers(),
                 'distribution' => $this->dashboard->moduleDistribution(),
                 'activities' => $this->dashboard->recentActivity(),
                 'systemStatus' => $this->dashboard->systemStatus(),

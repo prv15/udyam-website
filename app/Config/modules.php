@@ -72,7 +72,9 @@ return [
     'applications' => ['title' => 'Applications', 'singular' => 'Application', 'fields' => [
         'title' => $text('Application Title'), 'customer_email' => $email('Customer Email'),
         'application_type' => $text('Application Type'), 'reference' => $text('Reference Number', false),
-        'notes' => $area('Notes'), 'submitted_at' => $date('Submitted Date'),
+        'assigned_staff_id' => $text('Assigned Staff User ID', false),
+        'customer_visible_update' => $area('Update Visible to Customer'),
+        'notes' => $area('Internal Notes'), 'submitted_at' => $date('Submitted Date'),
     ]],
     'documents' => ['title' => 'Documents', 'singular' => 'Document', 'fields' => [
         'title' => $text('Document Name'), 'customer_email' => $email('Customer Email'),

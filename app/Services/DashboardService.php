@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use PDO;
+use PDOException;
 
 final class DashboardService
 {
@@ -14,15 +15,194 @@ final class DashboardService
 
     public function summary(): array
     {
+        $portalCustomers = $this->safeCount(
+            "SELECT COUNT(*) FROM users WHERE user_type = 'customer' AND status = 'active' AND deleted_at IS NULL"
+        );
+        $activeSubscriptions = $this->tableExists('customer_subscriptions')
+            ? $this->safeCount("SELECT COUNT(*) FROM customer_subscriptions WHERE status = 'active'")
+            : 0;
+        $outstanding = $this->tableExists('customer_invoices')
+            ? $this->safeAmount(
+                "SELECT COALESCE(SUM(GREATEST(total_amount - paid_amount, 0)), 0)
+                 FROM customer_invoices WHERE status IN ('issued','partial','overdue')"
+            )
+            : 0.0;
+        $monthRevenue = $this->tableExists('customer_payments')
+            ? $this->safeAmount(
+                "SELECT COALESCE(SUM(amount), 0) FROM customer_payments
+                 WHERE status = 'successful'
+                   AND payment_date >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')"
+            )
+            : 0.0;
+        $portalApplications = $this->tableExists('customer_service_requests')
+            ? $this->safeCount('SELECT COUNT(*) FROM customer_service_requests')
+            : 0;
+        $pendingPortalApplications = $this->tableExists('customer_service_requests')
+            ? $this->safeCount(
+                "SELECT COUNT(*) FROM customer_service_requests
+                 WHERE status IN ('submitted','under_review','information_requested')"
+            )
+            : 0;
+
         return [
             'pages' => $this->count('SELECT COUNT(*) FROM pages WHERE deleted_at IS NULL'),
+            'publishedPages' => $this->safeCount("SELECT COUNT(*) FROM pages WHERE status = 'published' AND deleted_at IS NULL"),
             'services' => $this->moduleCount('services'),
-            'applications' => $this->moduleCount('applications'),
-            'customers' => $this->moduleCount('customers'),
+            'applications' => max($portalApplications, $this->moduleCount('applications')),
+            'customers' => max($portalCustomers, $this->moduleCount('customers')),
             'media' => $this->count('SELECT COUNT(*) FROM media WHERE deleted_at IS NULL'),
-            'pendingApplications' => $this->moduleCount('applications', 'draft'),
+            'pendingApplications' => max($pendingPortalApplications, $this->moduleCount('applications', 'draft')),
             'newMessages' => $this->moduleCountByStatuses('contact-messages', ['new', 'active']),
+            'activeSubscriptions' => $activeSubscriptions,
+            'outstanding' => $outstanding,
+            'monthRevenue' => $monthRevenue,
         ];
+    }
+
+    public function businessInsights(): array
+    {
+        $insights = [
+            'activePlans' => 0,
+            'expiringSoon' => 0,
+            'pendingRequests' => 0,
+            'overdueInvoices' => 0,
+            'collectionRate' => 0.0,
+            'previousMonthRevenue' => 0.0,
+        ];
+
+        if ($this->tableExists('subscription_plans')) {
+            $insights['activePlans'] = $this->safeCount(
+                "SELECT COUNT(*) FROM subscription_plans WHERE status = 'active' AND deleted_at IS NULL"
+            );
+        }
+        if ($this->tableExists('customer_subscriptions')) {
+            $insights['expiringSoon'] = $this->safeCount(
+                "SELECT COUNT(*) FROM customer_subscriptions
+                 WHERE status = 'active' AND expires_at BETWEEN CURRENT_DATE AND DATE_ADD(CURRENT_DATE, INTERVAL 30 DAY)"
+            );
+        }
+        if ($this->tableExists('customer_service_requests')) {
+            $insights['pendingRequests'] = $this->safeCount(
+                "SELECT COUNT(*) FROM customer_service_requests
+                 WHERE status IN ('submitted','under_review','information_requested')"
+            );
+        }
+        if ($this->tableExists('customer_invoices')) {
+            $insights['overdueInvoices'] = $this->safeCount(
+                "SELECT COUNT(*) FROM customer_invoices
+                 WHERE status IN ('issued','partial','overdue') AND due_date < CURRENT_DATE"
+            );
+            $totals = $this->safeRow(
+                "SELECT COALESCE(SUM(total_amount),0) billed, COALESCE(SUM(paid_amount),0) collected
+                 FROM customer_invoices WHERE status <> 'cancelled'"
+            );
+            $billed = (float) ($totals['billed'] ?? 0);
+            $insights['collectionRate'] = $billed > 0
+                ? min(100, round(((float) ($totals['collected'] ?? 0) / $billed) * 100, 1))
+                : 0.0;
+        }
+        if ($this->tableExists('customer_payments')) {
+            $insights['previousMonthRevenue'] = $this->safeAmount(
+                "SELECT COALESCE(SUM(amount),0) FROM customer_payments
+                 WHERE status = 'successful'
+                   AND payment_date >= DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL 1 MONTH), '%Y-%m-01')
+                   AND payment_date < DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')"
+            );
+        }
+
+        return $insights;
+    }
+
+    public function revenueTrend(): array
+    {
+        $months = [];
+        for ($offset = 5; $offset >= 0; $offset--) {
+            $stamp = strtotime("-{$offset} months");
+            $key = date('Y-m', $stamp);
+            $months[$key] = ['label' => date('M', $stamp), 'value' => 0.0];
+        }
+
+        if ($this->tableExists('customer_payments')) {
+            $rows = $this->safeRows(
+                "SELECT DATE_FORMAT(payment_date, '%Y-%m') month_key, SUM(amount) value
+                 FROM customer_payments
+                 WHERE status = 'successful'
+                   AND payment_date >= DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL 5 MONTH), '%Y-%m-01')
+                 GROUP BY DATE_FORMAT(payment_date, '%Y-%m')
+                 ORDER BY month_key"
+            );
+            foreach ($rows as $row) {
+                $key = (string) $row['month_key'];
+                if (isset($months[$key])) {
+                    $months[$key]['value'] = (float) $row['value'];
+                }
+            }
+        }
+
+        return [
+            'labels' => array_column($months, 'label'),
+            'values' => array_column($months, 'value'),
+        ];
+    }
+
+    public function subscriptionMix(): array
+    {
+        if (!$this->tableExists('subscription_plans') || !$this->tableExists('customer_subscriptions')) {
+            return [];
+        }
+
+        return $this->safeRows(
+            "SELECT sp.name, sp.billing_cycle, COUNT(cs.id) subscriptions,
+                    COALESCE(SUM(cs.amount),0) value
+             FROM subscription_plans sp
+             LEFT JOIN customer_subscriptions cs ON cs.plan_id = sp.id AND cs.status = 'active'
+             WHERE sp.deleted_at IS NULL AND sp.status = 'active'
+             GROUP BY sp.id, sp.name, sp.billing_cycle
+             ORDER BY subscriptions DESC, sp.sort_order ASC
+             LIMIT 5"
+        );
+    }
+
+    public function applicationPipeline(): array
+    {
+        if ($this->tableExists('customer_service_requests')) {
+            $rows = $this->safeRows(
+                "SELECT status, COUNT(*) total FROM customer_service_requests GROUP BY status"
+            );
+        } else {
+            $rows = $this->safeRows(
+                "SELECT status, COUNT(*) total FROM admin_records
+                 WHERE module = 'applications' AND deleted_at IS NULL GROUP BY status"
+            );
+        }
+
+        $labels = [];
+        $values = [];
+        foreach ($rows as $row) {
+            $labels[] = ucwords(str_replace('_', ' ', (string) $row['status']));
+            $values[] = (int) $row['total'];
+        }
+
+        return ['labels' => $labels, 'values' => $values];
+    }
+
+    public function latestCustomers(int $limit = 5): array
+    {
+        if (!$this->tableExists('customer_profiles')) {
+            return [];
+        }
+
+        return $this->safeRows(
+            "SELECT u.id, u.first_name, u.last_name, u.email, u.status, u.created_at,
+                    cp.company_name, cp.customer_record_id,
+                    (SELECT COUNT(*) FROM customer_subscriptions cs
+                     WHERE cs.customer_id = u.id AND cs.status = 'active') active_subscriptions
+             FROM users u
+             LEFT JOIN customer_profiles cp ON cp.user_id = u.id
+             WHERE u.user_type = 'customer' AND u.deleted_at IS NULL
+             ORDER BY u.created_at DESC
+             LIMIT " . max(1, min(10, $limit))
+        );
     }
 
     public function moduleDistribution(): array
@@ -120,5 +300,52 @@ final class DashboardService
     private function count(string $sql): int
     {
         return (int) $this->db->query($sql)->fetchColumn();
+    }
+
+    private function safeCount(string $sql): int
+    {
+        try {
+            return (int) $this->db->query($sql)->fetchColumn();
+        } catch (PDOException) {
+            return 0;
+        }
+    }
+
+    private function safeAmount(string $sql): float
+    {
+        try {
+            return (float) $this->db->query($sql)->fetchColumn();
+        } catch (PDOException) {
+            return 0.0;
+        }
+    }
+
+    private function safeRow(string $sql): array
+    {
+        try {
+            return $this->db->query($sql)->fetch(PDO::FETCH_ASSOC) ?: [];
+        } catch (PDOException) {
+            return [];
+        }
+    }
+
+    private function safeRows(string $sql): array
+    {
+        try {
+            return $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException) {
+            return [];
+        }
+    }
+
+    private function tableExists(string $table): bool
+    {
+        try {
+            $statement = $this->db->prepare('SHOW TABLES LIKE :table');
+            $statement->execute(['table' => $table]);
+            return (bool) $statement->fetchColumn();
+        } catch (PDOException) {
+            return false;
+        }
     }
 }
