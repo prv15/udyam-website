@@ -27,6 +27,7 @@
                     <td><?= (int) $record['sort_order'] ?></td>
                     <td><?= htmlspecialchars((string) $record['updated_at']) ?></td>
                     <td>
+                        <?php if ($module === 'customers'): ?><a class="btn btn-sm btn-primary" href="<?= htmlspecialchars(url('/admin/customers/workspace/' . $record['id'])) ?>">Overview</a><?php endif; ?>
                         <a class="btn btn-sm" href="<?= htmlspecialchars(url('/admin/' . $module . '/edit/' . $record['id'])) ?>">Edit</a>
                         <form method="post" action="<?= htmlspecialchars(url('/admin/' . $module . '/delete/' . $record['id'])) ?>" class="d-inline" onsubmit="return confirm('Delete this record?')">
                             <?= csrf_field() ?><button class="btn btn-sm btn-danger" type="submit">Delete</button>

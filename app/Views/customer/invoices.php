@@ -1,0 +1,1 @@
+<div class="section-heading"><div><span>Billing documents</span><h2>Invoices</h2><p>Subscription and service invoices with GST and payment status.</p></div></div><?php require __DIR__.'/invoices-table.php';?>

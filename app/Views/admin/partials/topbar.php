@@ -21,13 +21,22 @@
 
     <div class="topbar-center">
 
-        <div class="search-box">
+        <div class="search-box global-search" data-search-url="<?= htmlspecialchars(url('/admin/search')) ?>">
 
             <i data-lucide="search"></i>
 
             <input
                 type="text"
-                placeholder="Search pages, services, blogs...">
+                id="adminGlobalSearch"
+                placeholder="Search customers, invoices, pages, services..."
+                autocomplete="off"
+                role="combobox"
+                aria-expanded="false"
+                aria-controls="adminSearchResults"
+                aria-autocomplete="list">
+
+            <kbd>⌘ K</kbd>
+            <div class="global-search-results" id="adminSearchResults" role="listbox" hidden></div>
 
         </div>
 
@@ -36,13 +45,36 @@
 
     <div class="topbar-right">
 
-        <a class="quick-btn" href="<?= htmlspecialchars(url('/admin/pages/create')) ?>">
-
-            <i data-lucide="plus"></i>
-
-            <span>New</span>
-
-        </a>
+        <div class="create-menu">
+            <button class="quick-btn create-menu-trigger" type="button" aria-expanded="false" aria-controls="adminCreateMenu">
+                <i data-lucide="plus"></i>
+                <span>New</span>
+                <i data-lucide="chevron-down" class="create-chevron"></i>
+            </button>
+            <div class="create-menu-panel" id="adminCreateMenu" hidden>
+                <div class="create-menu-heading"><span>Quick create</span><small>Start a new record</small></div>
+                <div class="create-menu-grid">
+                    <?php
+                    $createItems = [
+                        ['/admin/pages/create', 'file-plus-2', 'Page', 'Website content'],
+                        ['/admin/subscription-plans/create', 'badge-indian-rupee', 'Subscription', 'Customer plan'],
+                        ['/admin/services/create', 'briefcase-business', 'Service', 'Service catalogue'],
+                        ['/admin/customers/create', 'user-plus', 'Customer', 'Portal customer'],
+                        ['/admin/applications/create', 'clipboard-plus', 'Application', 'Service request'],
+                        ['/admin/tenders/create', 'megaphone', 'Tender / Notice', 'Latest update'],
+                        ['/admin/blog/create', 'newspaper', 'Article', 'Knowledge content'],
+                        ['/admin/media', 'image-plus', 'Media', 'Upload an asset'],
+                    ];
+                    foreach ($createItems as [$route, $icon, $label, $description]):
+                    ?>
+                        <a href="<?= htmlspecialchars(url($route)) ?>">
+                            <span><i data-lucide="<?= htmlspecialchars($icon) ?>"></i></span>
+                            <span><strong><?= htmlspecialchars($label) ?></strong><small><?= htmlspecialchars($description) ?></small></span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
 
         <a class="icon-btn notification-button<?= ($unreadContactCount ?? 0) > 0 ? ' has-notifications' : '' ?>" href="<?= htmlspecialchars(url('/admin/contact-messages')) ?>" aria-label="<?= (int) ($unreadContactCount ?? 0) ?> unread contact messages">
 

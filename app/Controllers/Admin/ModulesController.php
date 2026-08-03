@@ -7,12 +7,13 @@ namespace App\Controllers\Admin;
 use App\Core\Request;
 use App\Core\Session;
 use App\Models\AdminRecord;
+use App\Repositories\CustomerPortalRepository;
 
 final class ModulesController extends AdminController
 {
     private array $modules;
 
-    public function __construct(private readonly AdminRecord $records, private readonly Request $request)
+    public function __construct(private readonly AdminRecord $records, private readonly Request $request, private readonly CustomerPortalRepository $customerPortal)
     {
         parent::__construct();
         $this->modules = require CONFIG_PATH . '/modules.php';
@@ -55,13 +56,16 @@ final class ModulesController extends AdminController
             Session::set('old', $data);
             $this->redirect('/admin/' . $module . '/create');
         }
-        $this->records->create([
+        $recordId = $this->records->create([
             'module' => $module, 'title' => (string) ($data['title'] ?? reset($data)),
             'slug' => ($data['slug'] ?? null) ?: null, 'status' => $this->validStatus($module),
             'sort_order' => max(0, $this->request->integer('sort_order')),
             'data' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'created_by' => (int) Session::get('user')['id'], 'updated_by' => (int) Session::get('user')['id'],
         ]);
+        if (in_array($module, ['applications','documents','notifications'], true)) {
+            $this->customerPortal->bridgeLegacyRecord($module,$recordId,$data,$this->validStatus($module));
+        }
         $this->redirectSuccess('/admin/' . $module, $definition['singular'] . ' created successfully.');
     }
 
@@ -99,6 +103,7 @@ final class ModulesController extends AdminController
             'data' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'updated_by' => (int) Session::get('user')['id'],
         ]);
+        $this->customerPortal->syncLegacyRecord($module,$id,$data,$this->validStatus($module),(int)Session::get('user')['id']);
         $this->redirectSuccess('/admin/' . $module, $definition['singular'] . ' updated successfully.');
     }
 
@@ -163,7 +168,9 @@ final class ModulesController extends AdminController
         return match ($module) {
             'applications' => [
                 'submitted' => 'Submitted', 'under_review' => 'Under Review',
-                'approved' => 'Approved', 'rejected' => 'Rejected', 'closed' => 'Closed',
+                'information_requested' => 'Information Requested', 'approved' => 'Approved',
+                'in_progress' => 'In Progress', 'completed' => 'Completed',
+                'rejected' => 'Rejected', 'closed' => 'Closed',
             ],
             'documents' => [
                 'pending' => 'Pending Verification', 'verified' => 'Verified',

@@ -31,6 +31,10 @@ $menu = require CONFIG_PATH . '/admin-menu.php';
 
         </a>
 
+        <button class="sidebar-mobile-close" type="button" id="sidebarMobileClose" aria-label="Close navigation">
+            <i data-lucide="x"></i>
+        </button>
+
     </div>
 
     <!-- Navigation -->
@@ -90,3 +94,4 @@ $menu = require CONFIG_PATH . '/admin-menu.php';
     </div>
 
 </aside>
+<button class="sidebar-backdrop" type="button" id="sidebarBackdrop" aria-label="Close navigation" tabindex="-1"></button>

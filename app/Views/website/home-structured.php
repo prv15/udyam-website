@@ -14,6 +14,7 @@ $insight = $section('featured_insight');
 $network = $section('ecosystem_network');
 $knowledge = $section('knowledge_centre');
 $partnerSection = $section('partners');
+$hasTenderAccess = (bool) ($hasTenderAccess ?? false);
 $closingCta = $section('closing_cta');
 $footer = $section('footer');
 $audienceIcon = static function (string $name): string {
@@ -87,6 +88,7 @@ $ecosystemIcon = static function (string $name): string {
                 <?php require __DIR__ . '/partials/resource-menu.php'; ?>
             <?php endif; ?>
             <a href="<?= htmlspecialchars(url($item['url'] ?? '#')) ?>"><?= htmlspecialchars($item['label'] ?? '') ?></a>
+            <?php if ($navLabel === 'services'): ?><a href="<?= htmlspecialchars(url('/subscription-plans')) ?>">Subscription Plans</a><?php endif; ?>
         <?php endforeach; ?>
         <?php if (!$resourceRendered && !empty($header['resource_links'])): ?>
             <?php require __DIR__ . '/partials/resource-menu.php'; ?>
@@ -113,6 +115,7 @@ $ecosystemIcon = static function (string $name): string {
             <?php $mobileLabel = strtolower(trim((string) ($item['label'] ?? ''))); ?>
             <?php if (in_array($mobileLabel, ['knowledge centre', 'knowledge center', 'notice & tender', 'notice & tenders'], true)) continue; ?>
             <a href="<?= htmlspecialchars(url($item['url'] ?? '#')) ?>"><span><?= htmlspecialchars($item['label'] ?? '') ?></span><b>↗</b></a>
+            <?php if ($mobileLabel === 'services'): ?><a href="<?= htmlspecialchars(url('/subscription-plans')) ?>"><span>Subscription Plans</span><b>↗</b></a><?php endif; ?>
         <?php endforeach; ?>
         <?php if (!empty($header['resource_links'])): ?>
             <div class="mobile-resource-menu">
@@ -226,6 +229,7 @@ $ecosystemIcon = static function (string $name): string {
         <div class="hero-actions">
             <?php if (!empty($hero['primary_cta_label'])): ?><a class="primary" href="<?= htmlspecialchars(url($hero['primary_cta_url'] ?? '#')) ?>"><?= htmlspecialchars($hero['primary_cta_label']) ?> →</a><?php endif; ?>
             <?php if (!empty($hero['secondary_cta_label'])): ?><a class="secondary" href="<?= htmlspecialchars(url($hero['secondary_cta_url'] ?? '#')) ?>"><?= htmlspecialchars($hero['secondary_cta_label']) ?> →</a><?php endif; ?>
+            <a class="subscribe-now" href="#subscription-plans"><span class="subscribe-live-dot" aria-hidden="true"></span>Subscribe Now <b>→</b></a>
         </div>
     </div>
     <div class="hero-visual">
@@ -287,17 +291,20 @@ $ecosystemIcon = static function (string $name): string {
         <div class="tender-table"><table><thead><tr><th>Title</th><th>Department</th><th>Closing Date</th><th aria-label="Actions"></th></tr></thead><tbody>
             <?php foreach ($tenders as $item): ?>
                 <?php
+                $titleWords = preg_split('/\s+/', trim((string) ($item['title'] ?? '')), 2);
+                $titleLead = $titleWords[0] ?? '';
+                $titleRest = $titleWords[1] ?? '';
                 $closingDate = trim((string) ($item['closing_date'] ?? ''));
                 $dateLabel = $closingDate;
                 if ($closingDate !== '') {
                     try { $dateLabel = (new DateTimeImmutable($closingDate))->format('d M Y'); } catch (Throwable) {}
                 }
                 ?>
-                <tr data-tender-type="<?= htmlspecialchars(strtolower((string) ($item['type'] ?? 'tender'))) ?>">
-                    <td data-label="Title"><strong><?= htmlspecialchars($item['title']) ?></strong><small><?= htmlspecialchars(ucfirst((string) ($item['type'] ?? 'Tender'))) ?></small></td>
-                    <td data-label="Department"><?= htmlspecialchars($item['department'] ?? '') ?></td>
-                    <td data-label="Closing Date"><time datetime="<?= htmlspecialchars($closingDate) ?>"><?= htmlspecialchars($dateLabel) ?></time></td>
-                    <td><a class="tender-detail" href="<?= htmlspecialchars($item['document_url'] ?? '#') ?>">View Details <span>→</span></a></td>
+                <tr class="<?= $hasTenderAccess ? '' : 'tender-locked' ?>" data-tender-type="<?= htmlspecialchars(strtolower((string) ($item['type'] ?? 'tender'))) ?>">
+                    <td data-label="Title"><strong><?= htmlspecialchars($titleLead) ?><?php if (!$hasTenderAccess && $titleRest !== ''): ?> <span class="tender-blur"><?= htmlspecialchars($titleRest) ?></span><?php elseif ($hasTenderAccess): ?> <?= htmlspecialchars($titleRest) ?><?php endif; ?></strong><small><?= htmlspecialchars(ucfirst((string) ($item['type'] ?? 'Tender'))) ?></small></td>
+                    <td data-label="Department" class="<?= $hasTenderAccess ? '' : 'tender-blur' ?>"><?= htmlspecialchars($item['department'] ?? '') ?></td>
+                    <td data-label="Closing Date" class="<?= $hasTenderAccess ? '' : 'tender-blur' ?>"><time datetime="<?= htmlspecialchars($closingDate) ?>"><?= htmlspecialchars($dateLabel) ?></time></td>
+                    <td><?php if ($hasTenderAccess): ?><a class="tender-detail" href="<?= htmlspecialchars($item['document_url'] ?? '#') ?>">View Details <span>→</span></a><?php else: ?><a class="tender-unlock" href="<?= htmlspecialchars(url('/customer/plans')) ?>">Subscribe to unlock <span>↗</span></a><?php endif; ?></td>
                 </tr>
             <?php endforeach; ?>
             <?php if ($tenders === []): ?><tr class="tender-empty"><td colspan="4">No active notices or tenders.</td></tr><?php endif; ?>
@@ -306,6 +313,8 @@ $ecosystemIcon = static function (string $name): string {
         <a class="tender-all-button" href="#tender-list">View All Tenders &amp; Notices <span>→</span></a>
     </div>
 </section><?php endif; ?>
+
+<?php if (!empty($subscriptionPlans)): ?><section class="home-plans" id="subscription-plans"><div class="home-plans-heading"><span>Udyam Memberships</span><h2>Unlock more of what matters.</h2><p>Receive focused opportunities, notices and a secure space to move your work forward.</p></div><div class="home-plan-list"><?php foreach($subscriptionPlans as $plan):?><article><small><?=htmlspecialchars($plan['category']??'Membership')?></small><h3><?=htmlspecialchars($plan['name'])?></h3><p><?=htmlspecialchars($plan['subtitle']??'')?></p><strong>₹<?=number_format((float)($plan['price']??0),0)?><em>/ <?=htmlspecialchars($plan['billing_cycle']??'month')?></em></strong><div><a href="<?=htmlspecialchars(url('/subscription-plans'))?>">Know More</a><a class="home-plan-subscribe" href="<?=htmlspecialchars(url('/customer/plans'))?>">Subscribe Now <span>→</span></a></div></article><?php endforeach;?></div></section><?php endif; ?>
 
 <section class="two-column journey-why-section">
     <?php if ($journey): ?><div class="home-card journey-card"><h2><?= htmlspecialchars($journey['heading'] ?? 'Our Journey With You') ?></h2><div class="journey-row">

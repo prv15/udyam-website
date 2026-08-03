@@ -19,6 +19,10 @@ $router->get('/admin/dashboard', [
     \App\Controllers\Admin\DashboardController::class,
     'index'
 ]);
+$router->get('/admin/search', [
+    \App\Controllers\Admin\GlobalSearchController::class,
+    'index'
+]);
 
 $router->post('/admin/logout', [
     \App\Controllers\Admin\AuthController::class,
@@ -90,6 +94,16 @@ $router->get('/admin/profile', [\App\Controllers\Admin\AccountController::class,
 $router->post('/admin/profile/update', [\App\Controllers\Admin\AccountController::class, 'updateProfile']);
 $router->get('/admin/change-password', [\App\Controllers\Admin\AccountController::class, 'password']);
 $router->post('/admin/change-password/update', [\App\Controllers\Admin\AccountController::class, 'updatePassword']);
+
+$router->get('/admin/customers/workspace/{id}', [\App\Controllers\Admin\CustomerBillingController::class,'workspace']);
+$router->post('/admin/customers/workspace/{id}/invoice', [\App\Controllers\Admin\CustomerBillingController::class,'invoice']);
+$router->post('/admin/customers/workspace/{id}/payment', [\App\Controllers\Admin\CustomerBillingController::class,'payment']);
+$router->get('/admin/subscription-plans', [\App\Controllers\Admin\CustomerBillingController::class,'plans']);
+$router->get('/admin/subscription-plans/create', [\App\Controllers\Admin\CustomerBillingController::class,'planForm']);
+$router->post('/admin/subscription-plans/store', [\App\Controllers\Admin\CustomerBillingController::class,'savePlan']);
+$router->get('/admin/subscription-plans/edit/{id}', [\App\Controllers\Admin\CustomerBillingController::class,'editPlan']);
+$router->post('/admin/subscription-plans/update/{id}', [\App\Controllers\Admin\CustomerBillingController::class,'updatePlan']);
+$router->post('/admin/subscription-plans/archive/{id}', [\App\Controllers\Admin\CustomerBillingController::class,'archivePlan']);
 
 $router->get('/admin/{module}', [
     \App\Controllers\Admin\ModulesController::class,

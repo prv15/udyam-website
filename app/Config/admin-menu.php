@@ -92,6 +92,11 @@ return [
             'icon'  => 'bell-ring',
             'route' => '/admin/notifications',
         ],
+        [
+            'title' => 'Subscription Plans',
+            'icon'  => 'badge-indian-rupee',
+            'route' => '/admin/subscription-plans',
+        ],
     ],
 
     'ENQUIRIES' => [

@@ -15,6 +15,7 @@
                 <?php require __DIR__ . '/resource-menu.php'; ?>
             <?php endif; ?>
             <a href="<?= htmlspecialchars(url($item['url'] ?? '#')) ?>"><?= htmlspecialchars($item['label'] ?? '') ?></a>
+            <?php if ($navLabel === 'services'): ?><a href="<?= htmlspecialchars(url('/subscription-plans')) ?>">Subscription Plans</a><?php endif; ?>
         <?php endforeach; ?>
         <?php if (!$resourceRendered && !empty($header['resource_links'])) require __DIR__ . '/resource-menu.php'; ?>
     </nav>
@@ -35,6 +36,7 @@
             <?php $mobileLabel = strtolower(trim((string) ($item['label'] ?? ''))); ?>
             <?php if (in_array($mobileLabel, ['knowledge centre', 'knowledge center', 'notice & tender', 'notice & tenders'], true)) continue; ?>
             <a href="<?= htmlspecialchars(url($item['url'] ?? '#')) ?>"><span><?= htmlspecialchars($item['label'] ?? '') ?></span><b>↗</b></a>
+            <?php if ($mobileLabel === 'services'): ?><a href="<?= htmlspecialchars(url('/subscription-plans')) ?>"><span>Subscription Plans</span><b>↗</b></a><?php endif; ?>
         <?php endforeach; ?>
         <?php if (!empty($header['resource_links'])): ?>
             <div class="mobile-resource-menu">

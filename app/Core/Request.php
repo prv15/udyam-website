@@ -137,6 +137,16 @@ final class Request
     }
 
     /**
+     * String input without whitespace normalization.
+     *
+     * Passwords and signed values must be compared exactly as submitted.
+     */
+    public function rawString(string $key, string $default = ''): string
+    {
+        return (string) $this->input($key, $default);
+    }
+
+    /**
      * Return only selected fields
      */
     public function only(array $keys): array
