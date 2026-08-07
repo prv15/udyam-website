@@ -44,7 +44,7 @@ final class HomeService
             $sections[$section['section_key']] = $data;
         }
 
-        $viewer = Session::get('user', []);
+        $viewer = Session::get('customer_user', []);
         $hasTenderAccess = false;
         if (is_array($viewer) && ($viewer['user_type'] ?? '') === 'customer' && !empty($viewer['id'])) {
             $statement = Database::connection()->prepare(

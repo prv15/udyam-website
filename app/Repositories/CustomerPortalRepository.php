@@ -185,6 +185,21 @@ final class CustomerPortalRepository
     public function dashboard(int $customerId): array
     {
         return [
+            'profile' => $this->one(
+                'SELECT city,state,email_verified_at,company_name,mobile FROM customer_profiles WHERE user_id=? LIMIT 1',
+                [$customerId]
+            ),
+            'tenders' => array_map(
+                function (array $record): array {
+                    $data = json_decode((string) ($record['data'] ?? ''), true);
+                    return array_merge($record, is_array($data) ? $data : []);
+                },
+                $this->all(
+                    "SELECT * FROM admin_records
+                     WHERE module='tenders' AND status IN ('published','active') AND deleted_at IS NULL
+                     ORDER BY sort_order, created_at DESC LIMIT 6"
+                )
+            ),
             'subscription' => $this->one(
                 "SELECT cs.*,sp.name plan_name,sp.benefits FROM customer_subscriptions cs
                  JOIN subscription_plans sp ON sp.id=cs.plan_id
@@ -838,6 +853,85 @@ final class CustomerPortalRepository
             $params[$field] = $data[$field] ?? null;
         }
         $this->db->prepare('UPDATE customer_profiles SET ' . implode(',', $assignments) . ' WHERE user_id=:id')->execute($params);
+    }
+
+    public function hasActiveSubscription(int $customerId): bool
+    {
+        return $this->one(
+            "SELECT 1 FROM customer_subscriptions WHERE customer_id=? AND status='active'
+             AND (expires_at IS NULL OR expires_at >= CURDATE()) LIMIT 1",
+            [$customerId]
+        ) !== null;
+    }
+
+    /**
+     * Cross-panel search scoped to a single customer: applications, documents,
+     * invoices, notifications and tenders (tenders only for subscribers).
+     */
+    public function search(int $customerId, string $query, bool $hasSubscription, int $limit = 20): array
+    {
+        $query = trim(preg_replace('/\s+/', ' ', $query) ?? '');
+        if (mb_strlen($query) < 2) {
+            return [];
+        }
+        $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query) . '%';
+        $per = max(3, (int) ceil($limit / 5));
+        $results = [];
+
+        foreach ($this->all(
+            "SELECT r.id,r.application_number,r.project_name,r.status,a.title service_title
+             FROM customer_service_requests r JOIN admin_records a ON a.id=r.service_record_id
+             WHERE r.customer_id=? AND (r.application_number LIKE ? ESCAPE '\\\\'
+                OR r.project_name LIKE ? ESCAPE '\\\\' OR a.title LIKE ? ESCAPE '\\\\')
+             ORDER BY r.updated_at DESC LIMIT {$per}",
+            [$customerId, $like, $like, $like]
+        ) as $row) {
+            $results[] = ['group' => 'Applications', 'icon' => 'clipboard-list', 'title' => (string) ($row['project_name'] ?: $row['service_title']), 'meta' => (string) $row['application_number'] . ' · ' . ucfirst(str_replace('_', ' ', (string) $row['status'])), 'url' => url('/customer/applications/' . (int) $row['id'])];
+        }
+
+        foreach ($this->all(
+            "SELECT id,title,category,status FROM customer_documents
+             WHERE customer_id=? AND deleted_at IS NULL AND title LIKE ? ESCAPE '\\\\'
+             ORDER BY updated_at DESC LIMIT {$per}",
+            [$customerId, $like]
+        ) as $row) {
+            $results[] = ['group' => 'Documents', 'icon' => 'folder-open', 'title' => (string) $row['title'], 'meta' => ucfirst((string) $row['category']) . ' · ' . ucfirst((string) $row['status']), 'url' => url('/customer/documents')];
+        }
+
+        foreach ($this->all(
+            "SELECT id,invoice_number,total_amount,status FROM customer_invoices
+             WHERE customer_id=? AND invoice_number LIKE ? ESCAPE '\\\\' ORDER BY issue_date DESC LIMIT {$per}",
+            [$customerId, $like]
+        ) as $row) {
+            $results[] = ['group' => 'Billing', 'icon' => 'receipt-indian-rupee', 'title' => (string) $row['invoice_number'], 'meta' => '₹' . number_format((float) $row['total_amount'], 2) . ' · ' . ucfirst((string) $row['status']), 'url' => url('/customer/billing/invoices/' . (int) $row['id'])];
+        }
+
+        foreach ($this->all(
+            "SELECT id,title,message FROM customer_notifications
+             WHERE customer_id=? AND (title LIKE ? ESCAPE '\\\\' OR message LIKE ? ESCAPE '\\\\')
+             ORDER BY created_at DESC LIMIT {$per}",
+            [$customerId, $like, $like]
+        ) as $row) {
+            $results[] = ['group' => 'Notifications', 'icon' => 'bell', 'title' => (string) $row['title'], 'meta' => mb_substr((string) $row['message'], 0, 60), 'url' => url('/customer/notifications')];
+        }
+
+        foreach ($this->all(
+            "SELECT id,data FROM admin_records
+             WHERE module='tenders' AND status IN ('published','active') AND deleted_at IS NULL
+               AND data LIKE ? ESCAPE '\\\\' ORDER BY created_at DESC LIMIT {$per}",
+            [$like]
+        ) as $row) {
+            $data = json_decode((string) $row['data'], true) ?: [];
+            $results[] = [
+                'group' => 'Notices & Tenders',
+                'icon' => 'megaphone',
+                'title' => (string) ($data['title'] ?? 'Tender'),
+                'meta' => $hasSubscription ? ucfirst((string) ($data['type'] ?? '')) : 'Subscribe to view details',
+                'url' => $hasSubscription ? ((string) ($data['document_url'] ?? url('/customer/dashboard'))) : url('/customer/plans'),
+            ];
+        }
+
+        return array_slice($results, 0, $limit);
     }
 
     private function one(string $sql, array $params = []): ?array

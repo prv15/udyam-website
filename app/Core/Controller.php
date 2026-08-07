@@ -71,6 +71,11 @@ abstract class Controller
         Session::flash('error', $message);
     }
 
+    protected function info(string $message): void
+    {
+        Session::flash('info', $message);
+    }
+
     /**
      * 404 Response.
      */
@@ -110,6 +115,19 @@ protected function redirectError(
 ): never {
 
     $this->error($message);
+
+    $this->redirect($url);
+}
+
+/**
+ * Redirect with a neutral informational message (not an error).
+ */
+protected function redirectInfo(
+    string $url,
+    string $message
+): never {
+
+    $this->info($message);
 
     $this->redirect($url);
 }

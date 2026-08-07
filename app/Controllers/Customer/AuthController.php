@@ -47,6 +47,7 @@ final class AuthController extends Controller
             $this->redirectError('/customer/login', 'Invalid email or password.');
         }
         if (empty($customer['email_verified_at'])) {
+            Session::flash('unverified_email', $email);
             $this->redirectError('/customer/login', 'Please verify your email before signing in.');
         }
         $this->customers->clearAttempts($identity, 'login');
@@ -97,16 +98,38 @@ final class AuthController extends Controller
             error_log('Customer verification email failed: ' . $e->getMessage());
         }
         $this->customers->log($id, 'registration', 'Customer account created.');
-        $this->redirectSuccess('/customer/login', 'Account created. Please check your email to verify it.');
+        Session::flash('pending_verification_email', $data['email']);
+        $this->redirectSuccess('/customer/register', 'Account created. Please check your email to verify it.');
     }
 
     public function verifyEmail(): never
     {
         $userId = $this->customers->consumeToken($this->request->string('token'), 'verify_email');
-        if (!$userId) $this->redirectError('/customer/login', 'This verification link is invalid or expired.');
+        if (!$userId) $this->redirectError('/customer/login', 'This verification link is invalid or expired. Please request a new one below.');
         $this->customers->verifyEmail($userId);
         $this->customers->log($userId, 'email_verified', 'Email address verified.');
-        $this->redirectSuccess('/customer/login', 'Email verified. You can now sign in.');
+        $this->redirectSuccess('/customer/login', 'Email verified successfully. You can now log in.');
+    }
+
+    public function resendVerification(): never
+    {
+        (new CustomerGuestMiddleware())->handle();
+        $this->csrf();
+        $email = strtolower($this->request->string('email'));
+        $identity = $email . '|' . $this->request->ip();
+        if (!$this->customers->tooManyAttempts($identity, 'resend_verify', 3, 15)) {
+            $customer = $this->customers->findCustomerByEmail($email);
+            if ($customer && empty($customer['email_verified_at'])) {
+                try {
+                    $this->auth->sendVerification((int) $customer['id'], $email, trim($customer['first_name'] . ' ' . $customer['last_name']));
+                } catch (\Throwable $e) {
+                    error_log('Customer resend verification email failed: ' . $e->getMessage());
+                }
+            }
+            $this->customers->recordAttempt($identity, 'resend_verify');
+        }
+        // Same message whether or not the account exists / is already verified, so this can't be used to enumerate accounts.
+        $this->redirectSuccess('/customer/login', 'If that email needs verifying, a new verification link is on its way.');
     }
 
     public function forgotPassword(): void

@@ -83,7 +83,41 @@ final class PaymentController extends CustomerController
         $order=$this->portal->paymentOrder($this->id(),$token);
         if(!$order)$this->redirectError('/customer/billing','Payment order was not found.');
         if($order['status']==='paid')$this->redirectSuccess('/invoice/'.$order['invoice_token'],'Payment confirmed.');
-        $this->redirectError('/customer/billing','Payment confirmation is pending. The invoice will update automatically after PayYantra confirms it.');
+        // The webhook may not have arrived yet (or at all) by the time the browser returns here.
+        // PayYantra's own settlement can lag the redirect by a second or two, so retry a few times
+        // with short pauses before treating it as genuinely pending — this avoids showing a
+        // "pending" message to a customer whose payment actually succeeds moments later.
+        if(in_array($order['status'],['created','pending'],true)&&!empty($order['provider_order_id'])){
+            for($attempt=1;$attempt<=3;$attempt++){
+                try{
+                    $this->reconcile((int)$order['id'],(string)$order['provider_order_id']);
+                    $order=$this->portal->paymentOrder($this->id(),$token) ?? $order;
+                }catch(\Throwable $e){
+                    error_log('Payment return verification failed: '.$e->getMessage());
+                    break;
+                }
+                if($order['status']!=='created'&&$order['status']!=='pending')break;
+                if($attempt<3)usleep(1200000);
+            }
+        }
+        if($order['status']==='paid')$this->redirectSuccess('/invoice/'.$order['invoice_token'],'Payment confirmed.');
+        if($order['status']==='failed')$this->redirectError('/customer/billing','Payment was not successful. You can start a new checkout from Subscriptions.');
+        $this->redirectInfo('/customer/billing','Payment confirmation is still processing. The invoice will update automatically within a few minutes once PayYantra confirms it.');
+    }
+
+    private function reconcile(int $orderId,string $providerOrderId): void
+    {
+        $verified=$this->gateway->verifyOrder($providerOrderId);
+        $status=$verified['status'];
+        if(in_array($status,['SUCCESS','PAID','CAPTURED'],true)){
+            $transactionId=$verified['transaction_id']?:('PY-'.$providerOrderId);
+            $result=$this->portal->completePaymentOrder($orderId,$transactionId,['verified'=>$verified['raw']]);
+            if(!$result['already_paid'])$this->sendInvoice((string)$result['invoice_token']);
+            return;
+        }
+        if(in_array($status,['FAILED','DECLINED','CANCELLED','EXPIRED'],true)){
+            $this->portal->failPaymentOrder($orderId,'PayYantra reported '.$status.'.',['verified'=>$verified['raw']]);
+        }
     }
 
     private function sendInvoice(string $token): void

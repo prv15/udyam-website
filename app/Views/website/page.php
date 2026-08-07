@@ -7,7 +7,7 @@
 <?php if (!empty($header)) require __DIR__ . '/partials/site-header.php'; ?>
 <article class="website-page">
     <?php if (!empty($page['featured_image_url'])): ?>
-        <img src="<?= htmlspecialchars((string) $page['featured_image_url'], ENT_QUOTES, 'UTF-8') ?>"
+        <img src="<?= htmlspecialchars(public_url((string) $page['featured_image_url']), ENT_QUOTES, 'UTF-8') ?>"
              alt="<?= htmlspecialchars((string) $page['title'], ENT_QUOTES, 'UTF-8') ?>">
     <?php endif; ?>
     <header>

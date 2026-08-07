@@ -25,6 +25,30 @@ final class PortalController extends CustomerController
         $this->render('dashboard', ['title'=>'Dashboard','data'=>$this->portal->dashboard($this->id())]);
     }
 
+    public function search(): void
+    {
+        header('Content-Type: application/json');
+        try {
+            $query = $this->request->string('q');
+            $hasSubscription = $this->portal->hasActiveSubscription($this->id());
+            $results = $this->portal->search($this->id(), $query, $hasSubscription);
+            // JSON_INVALID_UTF8_SUBSTITUTE: a single stray non-UTF-8 byte in any matched title
+            // (common with copy-pasted content) otherwise makes json_encode() fail outright and
+            // silently return an empty body — this substitutes the bad byte instead of failing.
+            $encoded = json_encode(['results' => $results], JSON_INVALID_UTF8_SUBSTITUTE);
+            if ($encoded === false) {
+                error_log('Portal search JSON encode failed: ' . json_last_error_msg());
+                $encoded = json_encode(['results' => []]);
+            }
+            echo $encoded;
+        } catch (\Throwable $e) {
+            error_log('Portal search failed: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['results' => [], 'error' => 'Search is temporarily unavailable.']);
+        }
+        exit;
+    }
+
     public function profile(): void
     {
         $this->render('profile', ['title'=>'Company Profile','profile'=>$this->portal->findCustomer($this->id())]);
@@ -63,7 +87,12 @@ final class PortalController extends CustomerController
         }catch(\Throwable $e){
             if($checkout){try{$this->portal->failPaymentOrder((int)$checkout['order_id'],'Payment gateway initialization failed.');}catch(\Throwable){}}
             error_log('Subscription checkout failed: '.$e->getMessage());
-            $this->redirectError('/customer/plans','Checkout could not be started. Please try again.');
+            // TEMPORARY (local debug only, gated on APP_DEBUG): show the real exception instead
+            // of hunting for the PHP error log. Remove this branch before deploying.
+            $message=\App\Config\App::debug()
+                ? 'Checkout could not be started: '.$e->getMessage()
+                : 'Checkout could not be started. Please try again.';
+            $this->redirectError('/customer/plans',$message);
         }
     }
 

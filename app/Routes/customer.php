@@ -12,6 +12,7 @@ $router->post('/customer/login', [AuthController::class,'authenticate']);
 $router->get('/customer/register', [AuthController::class,'register']);
 $router->post('/customer/register', [AuthController::class,'storeRegistration']);
 $router->get('/customer/verify-email', [AuthController::class,'verifyEmail']);
+$router->post('/customer/resend-verification', [AuthController::class,'resendVerification']);
 $router->get('/customer/forgot-password', [AuthController::class,'forgotPassword']);
 $router->post('/customer/forgot-password', [AuthController::class,'sendReset']);
 $router->get('/customer/reset-password', [AuthController::class,'resetPassword']);
@@ -19,6 +20,7 @@ $router->post('/customer/reset-password', [AuthController::class,'updatePassword
 $router->post('/customer/logout', [AuthController::class,'logout']);
 
 $router->get('/customer/dashboard', [PortalController::class,'dashboard']);
+$router->get('/customer/search', [PortalController::class,'search']);
 $router->get('/customer/profile', [PortalController::class,'profile']);
 $router->post('/customer/profile', [PortalController::class,'updateProfile']);
 $router->get('/customer/plans', [PortalController::class,'plans']);

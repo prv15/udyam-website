@@ -80,7 +80,7 @@ $defaults = [
             ['label' => 'Downloads', 'description' => 'Reports, documents and publications', 'url' => '/#featured-insight', 'icon' => '↓'],
             ['label' => 'Resource Center', 'description' => 'Tools and institutional resources', 'url' => '/#resource-center', 'icon' => '◇'],
         ],
-        'portal_label' => 'Customer Portal', 'portal_url' => '/customer/login',
+        'portal_label' => 'Partner Portal', 'portal_url' => '/customer/login',
         'consultation_label' => 'Book Consultation', 'consultation_url' => '/contact',
     ],
     'hero' => [
@@ -257,8 +257,8 @@ foreach ($defaults as $sectionKey => $defaultData) {
     $findSection->execute(['page_id' => $pageId, 'section_key' => $sectionKey]);
     $current = json_decode((string) ($findSection->fetchColumn() ?: '{}'), true);
     $data = $mergeMissing(is_array($current) ? $current : [], $defaultData);
-    if ($sectionKey === 'header' && ($data['portal_label'] ?? '') === 'Client Portal') {
-        $data['portal_label'] = 'Customer Portal';
+    if ($sectionKey === 'header' && in_array($data['portal_label'] ?? '', ['Client Portal', 'Customer Portal'], true)) {
+        $data['portal_label'] = 'Partner Portal';
     }
     if ($sectionKey === 'header') {
         $navigationRoutes = [

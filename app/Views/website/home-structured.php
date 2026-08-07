@@ -1,6 +1,10 @@
 <?php
 $section = static fn (string $key): array => $sections[$key] ?? [];
 $header = $section('header');
+$portalLabel = trim((string) ($header['portal_label'] ?? ''));
+if ($portalLabel === '' || in_array($portalLabel, ['Customer Portal', 'Client Portal'], true)) {
+    $portalLabel = 'Partner Portal';
+}
 $hero = $section('hero');
 $audiences = $section('audiences');
 $stats = $section('impact_stats');
@@ -95,7 +99,28 @@ $ecosystemIcon = static function (string $name): string {
         <?php endif; ?>
     </nav>
     <div class="header-actions">
-        <?php if (!empty($header['portal_label'])): ?><a class="portal-cta" href="<?= htmlspecialchars(url($header['portal_url'] ?? '#')) ?>"><?= htmlspecialchars($header['portal_label']) ?></a><?php endif; ?>
+        <?php $headerCustomer = \App\Core\Session::get('customer_user'); ?>
+        <?php if (is_array($headerCustomer) && !empty($headerCustomer['id'])): ?>
+            <?php
+                $headerInitials = strtoupper(substr((string)($headerCustomer['first_name'] ?? ''), 0, 1) . substr((string)($headerCustomer['last_name'] ?? ''), 0, 1));
+                if ($headerInitials === '') $headerInitials = 'U';
+                $headerFullName = trim(($headerCustomer['first_name'] ?? '') . ' ' . ($headerCustomer['last_name'] ?? ''));
+                if ($headerFullName === '') $headerFullName = 'My Account';
+            ?>
+            <div class="header-account">
+                <button type="button" class="header-account-trigger" aria-haspopup="true" aria-expanded="false">
+                    <span class="header-account-avatar"><?= htmlspecialchars($headerInitials) ?></span>
+                    <span class="header-account-text"><strong><?= htmlspecialchars($headerFullName) ?></strong><small>Welcome Back</small></span>
+                    <span class="header-account-chevron">⌄</span>
+                </button>
+                <div class="header-account-menu">
+                    <a href="<?= htmlspecialchars(url('/customer/dashboard')) ?>">Dashboard</a>
+                    <form method="post" action="<?= htmlspecialchars(url('/customer/logout')) ?>"><?= csrf_field() ?><button type="submit">Logout</button></form>
+                </div>
+            </div>
+        <?php else: ?>
+            <a class="portal-cta" href="<?= htmlspecialchars(url($header['portal_url'] ?? '/customer/login')) ?>"><?= htmlspecialchars($portalLabel) ?></a>
+        <?php endif; ?>
         <a class="site-cta" href="<?= htmlspecialchars(url($header['consultation_url'] ?? '/contact')) ?>"><?= htmlspecialchars($header['consultation_label'] ?? 'Book Consultation') ?> <span>→</span></a>
     </div>
     <button class="mobile-menu-toggle" type="button" aria-label="Open navigation menu" aria-controls="mobile-navigation" aria-expanded="false">
@@ -132,7 +157,12 @@ $ecosystemIcon = static function (string $name): string {
         <?php endif; ?>
     </nav>
     <div class="mobile-menu-actions">
-        <?php if (!empty($header['portal_label'])): ?><a class="mobile-portal" href="<?= htmlspecialchars(url($header['portal_url'] ?? '#')) ?>"><?= htmlspecialchars($header['portal_label']) ?></a><?php endif; ?>
+        <?php if (is_array($headerCustomer ?? null) && !empty($headerCustomer['id'])): ?>
+            <a class="mobile-portal" href="<?= htmlspecialchars(url('/customer/dashboard')) ?>">My Dashboard</a>
+            <form method="post" action="<?= htmlspecialchars(url('/customer/logout')) ?>"><?= csrf_field() ?><button type="submit" class="mobile-portal">Logout</button></form>
+        <?php else: ?>
+            <a class="mobile-portal" href="<?= htmlspecialchars(url($header['portal_url'] ?? '/customer/login')) ?>"><?= htmlspecialchars($portalLabel) ?></a>
+        <?php endif; ?>
         <a class="mobile-consultation" href="<?= htmlspecialchars(url($header['consultation_url'] ?? '/contact')) ?>"><?= htmlspecialchars($header['consultation_label'] ?? 'Book Consultation') ?> <span>→</span></a>
     </div>
     <p class="mobile-menu-note">Empowering ideas. Building futures.</p>
@@ -197,6 +227,17 @@ $ecosystemIcon = static function (string $name): string {
     window.addEventListener('resize', () => {
         if (window.innerWidth > 1080) setMobileMenu(false);
     }, { passive: true });
+    const accountTrigger = document.querySelector('.header-account-trigger');
+    const account = document.querySelector('.header-account');
+    accountTrigger?.addEventListener('click', event => {
+        event.stopPropagation();
+        const open = account.classList.toggle('is-open');
+        accountTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', () => {
+        account?.classList.remove('is-open');
+        accountTrigger?.setAttribute('aria-expanded', 'false');
+    });
     document.addEventListener('DOMContentLoaded', () => {
         const tabs = document.querySelectorAll('[data-tender-filter]');
         const rows = document.querySelectorAll('[data-tender-type]');

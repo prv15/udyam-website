@@ -13,7 +13,7 @@ $cssVersion = (string)(@filemtime(ASSET_PATH . '/customer/portal.css') ?: '1');
 <script src="https://unpkg.com/lucide@latest"></script></head>
 <body class="customer-auth"><main class="auth-wrap">
 <section class="auth-story"><a href="<?= htmlspecialchars(url('/')) ?>"><img src="<?= htmlspecialchars(url('/uploads/media/original/home/udyam-ventures-logo-cropped.png')) ?>" alt="Udyam Ventures"></a>
-<div><span>Secure Customer Workspace</span><h1>Clarity across every service, document and payment.</h1><p>Your unified portal for advisory services, subscriptions, applications, invoices and collaboration with Udyam Ventures.</p></div>
+<div><span>Secure Partner Workspace</span><h1>Clarity across every service, document and payment.</h1><p>Your unified portal for advisory services, subscriptions, applications, invoices and collaboration with Udyam Ventures.</p></div>
 <small>Protected access · Enterprise-grade customer experience</small></section>
 <section class="auth-panel"><div class="auth-card">
 <?php if($success):?><div class="portal-alert success"><?=htmlspecialchars($success)?></div><?php endif;?>
