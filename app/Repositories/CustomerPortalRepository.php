@@ -16,7 +16,10 @@ final class CustomerPortalRepository
     {
         $statement = $this->db->prepare(
             "SELECT u.*, p.company_name, p.mobile, p.email_verified_at, p.logo_path,
-                    p.profile_photo_path, p.preferred_communication
+                    p.profile_photo_path, p.preferred_communication, p.contact_person,
+                    p.business_type, p.gst_number, p.pan_number, p.address_line_1,
+                    p.address_line_2, p.city, p.state, p.postal_code, p.country, p.annual_turnover_range,
+                    p.customer_record_id
              FROM users u
              LEFT JOIN customer_profiles p ON p.user_id = u.id
              WHERE LOWER(u.email) = LOWER(:email) AND u.user_type = 'customer'
@@ -28,9 +31,16 @@ final class CustomerPortalRepository
 
     public function emailExists(string $email): bool
     {
-        $statement=$this->db->prepare('SELECT COUNT(*) FROM users WHERE LOWER(email)=LOWER(?) AND deleted_at IS NULL');
-        $statement->execute([$email]);
-        return (int)$statement->fetchColumn()>0;
+        $statement=$this->db->prepare('SELECT id,user_type,deleted_at FROM users WHERE LOWER(email)=LOWER(?) LIMIT 1');
+        $statement->execute([$email]);$user=$statement->fetch();
+        if(!$user||!empty($user['deleted_at']))return false;
+        if($user['user_type']!=='customer')return true;
+        $record=$this->db->prepare(
+            "SELECT COUNT(*) FROM admin_records WHERE module='customers' AND deleted_at IS NULL
+             AND (CAST(JSON_UNQUOTE(JSON_EXTRACT(data,'$.user_id')) AS UNSIGNED)=? OR LOWER(JSON_UNQUOTE(JSON_EXTRACT(data,'$.email')))=LOWER(?))"
+        );
+        $record->execute([(int)$user['id'],$email]);
+        return (int)$record->fetchColumn()>0;
     }
 
     public function findCustomer(int $id): ?array
@@ -41,7 +51,7 @@ final class CustomerPortalRepository
                     p.gst_number, p.pan_number, p.address_line_1, p.address_line_2,
                     p.city, p.state, p.postal_code, p.country, p.logo_path,
                     p.profile_photo_path, p.contact_person, p.business_type,
-                    p.social_links, p.preferred_communication, p.email_verified_at,
+                    p.social_links, p.preferred_communication, p.annual_turnover_range, p.email_verified_at,
                     p.last_login_at, p.created_at AS profile_created_at,
                     p.updated_at AS profile_updated_at
              FROM users u LEFT JOIN customer_profiles p ON p.user_id = u.id
@@ -56,43 +66,95 @@ final class CustomerPortalRepository
         $this->db->beginTransaction();
         try {
             [$firstName, $lastName] = $this->splitName((string) $data['full_name']);
-            $user = $this->db->prepare(
-                "INSERT INTO users (first_name,last_name,email,password,user_type,status)
-                 VALUES (:first_name,:last_name,:email,:password,'customer','active')"
+            $email=strtolower((string)$data['email']);
+            $findUser=$this->db->prepare('SELECT id,user_type,deleted_at FROM users WHERE LOWER(email)=LOWER(?) LIMIT 1 FOR UPDATE');
+            $findUser->execute([$email]);$existingUser=$findUser->fetch();
+            if($existingUser){
+                if($existingUser['user_type']!=='customer'){
+                    throw new \InvalidArgumentException('An account already exists for this email.');
+                }
+                $id=(int)$existingUser['id'];
+                if(empty($existingUser['deleted_at'])){
+                    $liveRecord=$this->db->prepare(
+                        "SELECT COUNT(*) FROM admin_records WHERE module='customers' AND deleted_at IS NULL
+                         AND (CAST(JSON_UNQUOTE(JSON_EXTRACT(data,'$.user_id')) AS UNSIGNED)=? OR LOWER(JSON_UNQUOTE(JSON_EXTRACT(data,'$.email')))=LOWER(?))"
+                    );
+                    $liveRecord->execute([$id,$email]);
+                    if((int)$liveRecord->fetchColumn()>0)throw new \InvalidArgumentException('An account already exists for this email.');
+                }
+                $this->db->prepare(
+                    "UPDATE users SET first_name=?,last_name=?,password=?,user_type='customer',status='active',deleted_at=NULL,updated_at=NOW() WHERE id=?"
+                )->execute([$firstName,$lastName,(string)$data['password'],$id]);
+            }else{
+                $user=$this->db->prepare(
+                    "INSERT INTO users (first_name,last_name,email,password,user_type,status)
+                     VALUES (:first_name,:last_name,:email,:password,'customer','active')"
+                );
+                $user->execute(['first_name'=>$firstName,'last_name'=>$lastName,'email'=>$email,'password'=>(string)$data['password']]);
+                $id=(int)$this->db->lastInsertId();
+            }
+            $findRecord=$this->db->prepare(
+                "SELECT id,data FROM admin_records WHERE module='customers'
+                 AND (CAST(JSON_UNQUOTE(JSON_EXTRACT(data,'$.user_id')) AS UNSIGNED)=? OR LOWER(JSON_UNQUOTE(JSON_EXTRACT(data,'$.email')))=LOWER(?))
+                 ORDER BY (deleted_at IS NULL) DESC,id DESC LIMIT 1 FOR UPDATE"
             );
-            $user->execute([
-                'first_name' => $firstName, 'last_name' => $lastName,
-                'email' => strtolower((string) $data['email']),
-                'password' => (string) $data['password'],
-            ]);
-            $id = (int) $this->db->lastInsertId();
-            $findRecord=$this->db->prepare("SELECT id,data FROM admin_records WHERE module='customers' AND deleted_at IS NULL AND LOWER(JSON_UNQUOTE(JSON_EXTRACT(data,'$.email')))=LOWER(?) LIMIT 1");
-            $findRecord->execute([$data['email']]);$existing=$findRecord->fetch();
+            $findRecord->execute([$id,$email]);$existing=$findRecord->fetch();
             $recordData=array_merge($existing?(json_decode((string)$existing['data'],true)?:[]):[],[
-                'user_id'=>$id,'email'=>strtolower((string)$data['email']),'phone'=>$data['mobile']?:null,
+                'user_id'=>$id,'email'=>$email,'phone'=>$data['mobile']?:null,
                 'company'=>$data['company_name']?:null,'joined_at'=>date('Y-m-d'),
             ]);
             if($existing){
                 $recordId=(int)$existing['id'];
-                $this->db->prepare('UPDATE admin_records SET title=?,data=?,updated_at=NOW() WHERE id=?')->execute([$data['full_name'],json_encode($recordData),$recordId]);
+                $this->db->prepare("UPDATE admin_records SET title=?,status='active',data=?,deleted_at=NULL,updated_at=NOW() WHERE id=?")
+                    ->execute([$data['full_name'],json_encode($recordData,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),$recordId]);
             }else{
                 $record=$this->db->prepare("INSERT INTO admin_records (module,title,slug,status,data) VALUES ('customers',:title,:slug,'active',:data)");
                 $record->execute(['title'=>$data['full_name'],'slug'=>'customer-'.$id,'data'=>json_encode($recordData,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)]);
                 $recordId=(int)$this->db->lastInsertId();
             }
-            $profile = $this->db->prepare(
-                'INSERT INTO customer_profiles (user_id,customer_record_id,company_name,mobile,contact_person)
-                 VALUES (:user_id,:customer_record_id,:company_name,:mobile,:contact_person)'
-            );
-            $profile->execute([
-                'user_id' => $id, 'customer_record_id'=>$recordId, 'company_name' => $data['company_name'] ?: null,
-                'mobile' => $data['mobile'] ?: null, 'contact_person' => $data['full_name'],
-            ]);
+            $profile=$this->db->prepare('SELECT id FROM customer_profiles WHERE user_id=? LIMIT 1 FOR UPDATE');
+            $profile->execute([$id]);$profileId=$profile->fetchColumn();
+            if($profileId){
+                $this->db->prepare('UPDATE customer_profiles SET customer_record_id=?,company_name=?,mobile=?,contact_person=?,email_verified_at=NULL,updated_at=NOW() WHERE id=?')
+                    ->execute([$recordId,$data['company_name']?:null,$data['mobile']?:null,$data['full_name'],(int)$profileId]);
+            }else{
+                $this->db->prepare('INSERT INTO customer_profiles (user_id,customer_record_id,company_name,mobile,contact_person) VALUES (?,?,?,?,?)')
+                    ->execute([$id,$recordId,$data['company_name']?:null,$data['mobile']?:null,$data['full_name']]);
+            }
             $this->db->commit();
             return $id;
         } catch (\Throwable $e) {
             $this->db->rollBack();
             throw $e;
+        }
+    }
+
+    public function deleteCustomerRecords(array $recordIds): int
+    {
+        $recordIds=array_values(array_unique(array_filter(array_map('intval',$recordIds),static fn(int $id):bool=>$id>0)));
+        if($recordIds===[])return 0;
+        $placeholders=implode(',',array_fill(0,count($recordIds),'?'));
+        $this->db->beginTransaction();
+        try{
+            $statement=$this->db->prepare("SELECT id,data FROM admin_records WHERE module='customers' AND deleted_at IS NULL AND id IN ({$placeholders}) FOR UPDATE");
+            $statement->execute($recordIds);$records=$statement->fetchAll();
+            foreach($records as $record){
+                $data=json_decode((string)$record['data'],true)?:[];
+                $userId=(int)($data['user_id']??0);
+                if($userId>0){
+                    $this->db->prepare("UPDATE users SET status='inactive',deleted_at=NOW(),updated_at=NOW() WHERE id=? AND user_type='customer' AND deleted_at IS NULL")
+                        ->execute([$userId]);
+                }elseif(!empty($data['email'])){
+                    $this->db->prepare("UPDATE users SET status='inactive',deleted_at=NOW(),updated_at=NOW() WHERE LOWER(email)=LOWER(?) AND user_type='customer' AND deleted_at IS NULL")
+                        ->execute([(string)$data['email']]);
+                }
+            }
+            $delete=$this->db->prepare("UPDATE admin_records SET deleted_at=NOW(),updated_at=NOW() WHERE module='customers' AND deleted_at IS NULL AND id IN ({$placeholders})");
+            $delete->execute($recordIds);$count=$delete->rowCount();
+            $this->db->commit();return $count;
+        }catch(\Throwable $exception){
+            if($this->db->inTransaction())$this->db->rollBack();
+            throw $exception;
         }
     }
 
@@ -184,9 +246,26 @@ final class CustomerPortalRepository
 
     public function dashboard(int $customerId): array
     {
+        $months = [];
+        for ($offset = 5; $offset >= 0; $offset--) {
+            $date = new \DateTimeImmutable("first day of -{$offset} months");
+            $months[$date->format('Y-m')] = ['label' => $date->format('M'), 'value' => 0.0];
+        }
+        foreach ($this->all(
+            "SELECT DATE_FORMAT(payment_date,'%Y-%m') period,SUM(amount) amount
+             FROM customer_payments WHERE customer_id=? AND status='successful'
+               AND payment_date >= DATE_FORMAT(DATE_SUB(CURDATE(),INTERVAL 5 MONTH),'%Y-%m-01')
+             GROUP BY DATE_FORMAT(payment_date,'%Y-%m') ORDER BY period",
+            [$customerId]
+        ) as $row) {
+            if (isset($months[(string) $row['period']])) {
+                $months[(string) $row['period']]['value'] = (float) $row['amount'];
+            }
+        }
+
         return [
             'profile' => $this->one(
-                'SELECT city,state,email_verified_at,company_name,mobile FROM customer_profiles WHERE user_id=? LIMIT 1',
+                'SELECT city,state,email_verified_at,company_name,mobile,contact_person,gst_number,address_line_1 FROM customer_profiles WHERE user_id=? LIMIT 1',
                 [$customerId]
             ),
             'tenders' => array_map(
@@ -227,6 +306,18 @@ final class CustomerPortalRepository
                 'SELECT * FROM customer_notifications WHERE customer_id=? AND archived_at IS NULL ORDER BY created_at DESC LIMIT 5',
                 [$customerId]
             ),
+            'unreadNotifications' => $this->scalar(
+                'SELECT COUNT(*) FROM customer_notifications WHERE customer_id=? AND read_at IS NULL AND archived_at IS NULL',
+                [$customerId]
+            ),
+            'applicationStatus' => $this->all(
+                'SELECT status,COUNT(*) total FROM customer_service_requests WHERE customer_id=? GROUP BY status',
+                [$customerId]
+            ),
+            'billingTrend' => [
+                'labels' => array_column($months, 'label'),
+                'values' => array_column($months, 'value'),
+            ],
             'activity' => $this->all(
                 'SELECT * FROM customer_activity_logs WHERE customer_id=? ORDER BY created_at DESC LIMIT 8',
                 [$customerId]
@@ -359,6 +450,30 @@ final class CustomerPortalRepository
         $sgst=round($gst-$cgst,2);
         $this->db->beginTransaction();
         try{
+            $this->one("SELECT id FROM users WHERE id=? AND user_type='customer' LIMIT 1 FOR UPDATE",[$customerId]);
+            if($this->one("SELECT id FROM customer_subscriptions WHERE customer_id=? AND status='active' AND (expires_at IS NULL OR expires_at>=CURDATE()) LIMIT 1",[$customerId])){
+                throw new \InvalidArgumentException('You already have an active subscription. Request a cancellation or pause before choosing another plan.');
+            }
+            $existing=$this->one(
+                "SELECT po.id order_id,po.public_token order_token,po.invoice_id,po.subscription_id,po.amount,po.checkout_url,
+                        i.public_token invoice_token
+                 FROM customer_payment_orders po JOIN customer_subscriptions cs ON cs.id=po.subscription_id
+                 JOIN customer_invoices i ON i.id=po.invoice_id
+                 WHERE po.customer_id=? AND cs.plan_id=? AND cs.status='pending' AND po.status IN ('created','pending')
+                   AND (po.expires_at IS NULL OR po.expires_at>NOW()) ORDER BY po.id DESC LIMIT 1 FOR UPDATE",
+                [$customerId,$planId]
+            );
+            if($existing&&!empty($existing['checkout_url'])){
+                $this->db->commit();
+                return array_merge($existing,['currency'=>'INR','plan'=>$plan,'resume'=>true]);
+            }
+            if($existing){
+                $this->db->prepare("UPDATE customer_payment_orders SET status='failed',failure_reason='Gateway checkout was not initialized.' WHERE id=? AND status='created'")->execute([(int)$existing['order_id']]);
+                $this->db->prepare("UPDATE customer_invoices SET status='cancelled' WHERE id=? AND status='issued'")->execute([(int)$existing['invoice_id']]);
+                $this->db->prepare("UPDATE customer_subscriptions SET status='cancelled' WHERE id=? AND status='pending'")->execute([(int)$existing['subscription_id']]);
+            }
+            $this->db->prepare("UPDATE customer_subscriptions cs JOIN customer_payment_orders po ON po.subscription_id=cs.id SET cs.status='cancelled',po.status='expired' WHERE cs.customer_id=? AND cs.status='pending' AND po.status IN ('created','pending') AND po.expires_at<=NOW()")
+                ->execute([$customerId]);
             $this->db->prepare(
                 "INSERT INTO customer_subscriptions (customer_id,plan_id,status,starts_at,expires_at,amount)
                  VALUES (?,?,'pending',CURDATE(),DATE_ADD(CURDATE(),INTERVAL ? MONTH),?)"
@@ -401,14 +516,15 @@ final class CustomerPortalRepository
 
     public function attachGatewayOrder(int $orderId, array $gateway): void
     {
-        $this->db->prepare(
+        $statement=$this->db->prepare(
             'UPDATE customer_payment_orders SET provider_order_id=?,provider_session_id=?,checkout_url=?,
              request_payload=?,response_payload=?,status="pending" WHERE id=? AND status="created"'
-        )->execute([
+        );$statement->execute([
             $gateway['provider_order_id']??null,$gateway['provider_session_id']??null,
             $gateway['checkout_url']??null,json_encode($gateway['request']??[],JSON_UNESCAPED_SLASHES),
             json_encode($gateway['response']??[],JSON_UNESCAPED_SLASHES),$orderId,
         ]);
+        if($statement->rowCount()!==1)throw new \RuntimeException('The payment order could not be activated. Please start checkout again.');
     }
 
     public function startInvoiceCheckout(int $customerId, int $invoiceId): array
@@ -429,6 +545,15 @@ final class CustomerPortalRepository
             if(!in_array($invoice['status'],['issued','partial','overdue'],true))throw new \InvalidArgumentException('This invoice is not available for payment.');
             $amount=round((float)$invoice['total_amount']-(float)$invoice['paid_amount'],2);
             if($amount<=0)throw new \InvalidArgumentException('This invoice has no outstanding balance.');
+            $existing=$this->one(
+                "SELECT id order_id,public_token order_token,invoice_id,subscription_id,amount,checkout_url
+                 FROM customer_payment_orders WHERE customer_id=? AND invoice_id=? AND status IN ('created','pending')
+                   AND (expires_at IS NULL OR expires_at>NOW()) ORDER BY id DESC LIMIT 1 FOR UPDATE",[$customerId,$invoiceId]
+            );
+            if($existing&&!empty($existing['checkout_url'])){
+                $this->db->commit();
+                return array_merge($existing,['invoice_token'=>(string)($invoice['public_token']??''),'currency'=>'INR','description'=>$invoice['subscription_name']??$invoice['service_name']??$invoice['project_name']??('Invoice '.$invoice['invoice_number']),'resume'=>true]);
+            }
             $invoiceToken=(string)($invoice['public_token']??'');
             if($invoiceToken===''){
                 $invoiceToken=bin2hex(random_bytes(32));
@@ -473,7 +598,22 @@ final class CustomerPortalRepository
 
     public function paymentOrderByProviderId(string $providerOrderId): ?array
     {
-        return $this->one('SELECT * FROM customer_payment_orders WHERE provider_order_id=? LIMIT 1',[$providerOrderId]);
+        return $this->one(
+            'SELECT * FROM customer_payment_orders WHERE provider_order_id=? OR provider_session_id=? LIMIT 1',
+            [$providerOrderId,$providerOrderId]
+        );
+    }
+
+    public function pendingPaymentOrderForCustomer(int $customerId): ?array
+    {
+        return $this->one(
+            "SELECT * FROM customer_payment_orders
+             WHERE customer_id=? AND status IN ('created','pending','failed','expired')
+               AND provider_order_id IS NOT NULL
+               AND created_at>=DATE_SUB(NOW(),INTERVAL 14 DAY)
+             ORDER BY id DESC LIMIT 1",
+            [$customerId]
+        );
     }
 
     public function completePaymentOrder(int $orderId, string $transactionId, array $payload = []): array
@@ -485,23 +625,43 @@ final class CustomerPortalRepository
             $invoice=$this->one('SELECT * FROM customer_invoices WHERE id=? LIMIT 1 FOR UPDATE',[(int)$order['invoice_id']]);
             if(!$invoice)throw new \RuntimeException('Invoice not found for payment order.');
             if($order['status']==='paid'){
+                // Idempotent callbacks must also heal any legacy partial transition where the
+                // order was marked paid but its linked invoice/subscription remained pending.
+                $this->db->prepare('UPDATE customer_invoices SET paid_amount=total_amount,status="paid",paid_at=COALESCE(paid_at,NOW()) WHERE id=?')
+                    ->execute([(int)$order['invoice_id']]);
+                if(!empty($order['subscription_id'])){
+                    $this->db->prepare(
+                        'UPDATE customer_subscriptions
+                         SET expires_at=IF(expires_at IS NULL,NULL,DATE_ADD(CURDATE(),INTERVAL GREATEST(1,DATEDIFF(expires_at,starts_at)) DAY)),
+                             starts_at=CURDATE(),status="active"
+                         WHERE id=? AND status<>"active"'
+                    )
+                        ->execute([(int)$order['subscription_id']]);
+                }
                 $this->db->commit();
                 return ['invoice_id'=>(int)$invoice['id'],'invoice_token'=>(string)$invoice['public_token'],'customer_id'=>(int)$order['customer_id'],'already_paid'=>true];
             }
-            if(!in_array($order['status'],['created','pending'],true))throw new \InvalidArgumentException('This payment order can no longer be completed.');
+            // Verified provider success is authoritative and may heal an earlier timeout,
+            // failed callback, or expiry because gateway events can arrive out of order.
             $amount=round((float)$order['amount'],2);
             $receipt='UVR/'.date('Ymd').'/' . strtoupper(bin2hex(random_bytes(3)));
-            $this->db->prepare(
+            $existingPayment=$transactionId!==''?$this->one('SELECT * FROM customer_payments WHERE transaction_id=? LIMIT 1 FOR UPDATE',[$transactionId]):null;
+            if($existingPayment&&(int)$existingPayment['invoice_id']!==(int)$order['invoice_id'])throw new \RuntimeException('The gateway transaction is already linked to another invoice.');
+            if(!$existingPayment){$this->db->prepare(
                 'INSERT INTO customer_payments
                  (customer_id,invoice_id,transaction_id,method,amount,status,payment_date,receipt_number,notes)
                  VALUES (?,?,?,"gateway",?,"successful",NOW(),?,"PayYantra checkout")'
-            )->execute([(int)$order['customer_id'],(int)$order['invoice_id'],$transactionId,$amount,$receipt]);
+            )->execute([(int)$order['customer_id'],(int)$order['invoice_id'],$transactionId,$amount,$receipt]);}
             $this->db->prepare('UPDATE customer_invoices SET paid_amount=total_amount,status="paid",paid_at=NOW() WHERE id=?')
                 ->execute([(int)$order['invoice_id']]);
-            $this->db->prepare('UPDATE customer_payment_orders SET status="paid",paid_at=NOW(),callback_payload=? WHERE id=?')
+            $this->db->prepare('UPDATE customer_payment_orders SET status="paid",paid_at=COALESCE(paid_at,NOW()),failure_reason=NULL,callback_payload=? WHERE id=?')
                 ->execute([json_encode($payload,JSON_UNESCAPED_SLASHES),$orderId]);
             if(!empty($order['subscription_id'])){
-                $this->db->prepare('UPDATE customer_subscriptions SET status="active",starts_at=CURDATE() WHERE id=?')
+                $this->db->prepare(
+                    'UPDATE customer_subscriptions
+                     SET expires_at=IF(expires_at IS NULL,NULL,DATE_ADD(CURDATE(),INTERVAL GREATEST(1,DATEDIFF(expires_at,starts_at)) DAY)),
+                         starts_at=CURDATE(),status="active" WHERE id=?'
+                )
                     ->execute([(int)$order['subscription_id']]);
             }
             $this->db->prepare(
@@ -541,9 +701,65 @@ final class CustomerPortalRepository
         }
     }
 
+    public function paymentOrderByToken(string $token): ?array
+    {
+        return $this->one('SELECT * FROM customer_payment_orders WHERE public_token=? LIMIT 1',[$token]);
+    }
+
+    public function reconciliationCandidates(int $limit=100): array
+    {
+        $limit=max(1,min(500,$limit));
+        // Scheduled reconciliation is for current checkouts. Old orders may belong to retired
+        // PayYantra credentials/environments and cannot be queried with the current access token.
+        // A late verified webhook/return can still heal an older order via completePaymentOrder().
+        return $this->all("SELECT * FROM customer_payment_orders WHERE provider_order_id IS NOT NULL AND status IN ('created','pending') AND created_at>=DATE_SUB(NOW(),INTERVAL 48 HOUR) ORDER BY updated_at ASC,id ASC LIMIT {$limit}");
+    }
+
     public function documents(int $customerId): array
     {
         return $this->all('SELECT * FROM customer_documents WHERE customer_id=? AND deleted_at IS NULL ORDER BY created_at DESC', [$customerId]);
+    }
+
+    public function tendersForCustomer(int $page=1,int $perPage=10,array $filters=[]): array
+    {
+        [$where,$params]=$this->tenderConditions($filters);$offset=max(0,($page-1)*$perPage);$sort=$filters['sort']??'latest';
+        $date="COALESCE(JSON_UNQUOTE(JSON_EXTRACT(data,'$.closing_date')),'')";
+        $order=in_array($sort,['latest','deadline','ongoing'],true)?"{$date} ASC,created_at DESC":"{$date} DESC,created_at DESC";
+        $statement=$this->db->prepare("SELECT * FROM admin_records WHERE {$where} ORDER BY {$order} LIMIT :limit OFFSET :offset");
+        foreach($params as $key=>$value)$statement->bindValue($key,$value);$statement->bindValue(':limit',$perPage,\PDO::PARAM_INT);$statement->bindValue(':offset',$offset,\PDO::PARAM_INT);$statement->execute();
+        return array_map(function(array $record): array { $data=json_decode((string)($record['data']??''),true); return array_merge($record,is_array($data)?$data:[]); },$statement->fetchAll());
+    }
+
+    public function tendersTotal(array $filters=[]): int
+    {
+        [$where,$params]=$this->tenderConditions($filters);return (int)$this->scalar("SELECT COUNT(*) FROM admin_records WHERE {$where}",$params);
+    }
+
+    public function tenderFilterOptions(): array
+    {
+        $rows=$this->all("SELECT JSON_UNQUOTE(JSON_EXTRACT(data,'$.region')) AS region, JSON_UNQUOTE(JSON_EXTRACT(data,'$.invited_by')) AS invited_by FROM admin_records WHERE module='tenders' AND status IN ('published','active','expired') AND deleted_at IS NULL");
+        $regions=[];$organisations=[];foreach($rows as $row){$region=trim((string)($row['region']??''));$organisation=trim((string)($row['invited_by']??''));if($region!=='')$regions[$region]=true;if($organisation!=='')$organisations[$organisation]=true;}ksort($regions,SORT_NATURAL|SORT_FLAG_CASE);ksort($organisations,SORT_NATURAL|SORT_FLAG_CASE);
+        return ['regions'=>array_keys($regions),'organisations'=>array_keys($organisations)];
+    }
+
+    private function tenderConditions(array $filters): array
+    {
+        $where="module='tenders' AND status IN ('published','active','expired') AND deleted_at IS NULL";$params=[];
+        if(($q=trim((string)($filters['q']??'')))!==''){$where.=" AND (LOWER(title) LIKE :q_title OR LOWER(data) LIKE :q_data)";$term='%'.mb_strtolower($q).'%';$params[':q_title']=$term;$params[':q_data']=$term;}
+        if(($region=trim((string)($filters['region']??'')))!==''){$where.=" AND JSON_UNQUOTE(JSON_EXTRACT(data,'$.region'))=:region";$params[':region']=$region;}
+        if(($invitedBy=trim((string)($filters['invited_by']??'')))!==''){$where.=" AND JSON_UNQUOTE(JSON_EXTRACT(data,'$.invited_by'))=:invited_by";$params[':invited_by']=$invitedBy;}
+        $date="COALESCE(JSON_UNQUOTE(JSON_EXTRACT(data,'$.closing_date')),'')";$sort=$filters['sort']??'latest';
+        if($sort==='latest')$where.=" AND status IN ('active','published') AND {$date}<>'' AND {$date}>=CURDATE()";
+        if($sort==='deadline')$where.=" AND {$date}<>''";
+        if($sort==='expired')$where.=" AND {$date}<>'' AND (status='expired' OR {$date}<CURDATE())";
+        if($sort==='ongoing')$where.=" AND status IN ('active','published') AND ({$date}='' OR {$date}>=CURDATE())";
+        return [$where,$params];
+    }
+
+    public function tenderForCustomer(int $id): ?array
+    {
+        $record=$this->one("SELECT * FROM admin_records WHERE id=? AND module='tenders' AND status IN ('published','active','expired') AND deleted_at IS NULL LIMIT 1",[$id]);
+        if(!$record)return null;$data=json_decode((string)($record['data']??''),true);return array_merge($record,is_array($data)?$data:[]);
     }
 
     public function addDocument(int $customerId, array $file): int
@@ -591,6 +807,26 @@ final class CustomerPortalRepository
         $column = $archive ? 'archived_at' : 'read_at';
         $this->db->prepare("UPDATE customer_notifications SET {$column}=NOW(),read_at=COALESCE(read_at,NOW()) WHERE id=? AND customer_id=?")
             ->execute([$id,$customerId]);
+    }
+
+    public function markAllNotifications(int $customerId): void
+    {
+        $this->db->prepare('UPDATE customer_notifications SET read_at=NOW() WHERE customer_id=? AND read_at IS NULL AND archived_at IS NULL')->execute([$customerId]);
+    }
+
+    public function supportTickets(int $customerId): array
+    {
+        return $this->all('SELECT * FROM customer_support_tickets WHERE customer_id=? ORDER BY created_at DESC LIMIT 50', [$customerId]);
+    }
+
+    public function createSupportTicket(int $customerId, string $topic, string $subject, string $message): int
+    {
+        if (!in_array($topic, ['subscription','billing','application','document','technical','general'], true)) throw new \InvalidArgumentException('Please choose a valid support topic.');
+        if (mb_strlen($subject) < 3 || mb_strlen($subject) > 255) throw new \InvalidArgumentException('Please enter a clear subject between 3 and 255 characters.');
+        if (mb_strlen($message) < 10 || mb_strlen($message) > 5000) throw new \InvalidArgumentException('Please provide at least 10 characters so the team can help you.');
+        $statement=$this->db->prepare('INSERT INTO customer_support_tickets (customer_id,topic,subject,message) VALUES (?,?,?,?)');
+        $statement->execute([$customerId,$topic,$subject,$message]);
+        return (int)$this->db->lastInsertId();
     }
 
     public function invoices(int $customerId): array
@@ -647,6 +883,16 @@ final class CustomerPortalRepository
         );
     }
 
+    public function subscriptions(int $customerId): array
+    {
+        return $this->all(
+            'SELECT cs.*,sp.name plan_name,sp.billing_cycle,sp.benefits
+             FROM customer_subscriptions cs JOIN subscription_plans sp ON sp.id=cs.plan_id
+             WHERE cs.customer_id=? ORDER BY FIELD(cs.status,"active","pending","expired","cancelled","suspended"),cs.updated_at DESC',
+            [$customerId]
+        );
+    }
+
     public function billingSummary(int $customerId): array
     {
         return [
@@ -675,11 +921,22 @@ final class CustomerPortalRepository
             'dashboard'=>$customer?$this->dashboard((int)$customer['id']):[],
             'applications'=>$customer?$this->applications((int)$customer['id']):[],
             'documents'=>$customer?$this->documents((int)$customer['id']):[],
+            'subscriptions'=>$customer?$this->subscriptions((int)$customer['id']):[],
             'invoices'=>$customer?$this->invoices((int)$customer['id']):[],
             'payments'=>$customer?$this->payments((int)$customer['id']):[],
+            'plans'=>$this->plans(),
             'activity'=>$customer?$this->activity((int)$customer['id']):[],
             'notifications'=>$customer?$this->notifications((int)$customer['id']):[],
         ];
+    }
+
+    public function customerForAdminRecord(int $customerRecordId): ?array
+    {
+        $record=$this->one("SELECT data FROM admin_records WHERE id=? AND module='customers' AND deleted_at IS NULL LIMIT 1",[$customerRecordId]);
+        if(!$record)return null;
+        $data=json_decode((string)$record['data'],true)?:[];
+        $email=(string)($data['email']??'');
+        return $email!==''?$this->findCustomerByEmail($email):null;
     }
 
     public function adminPlans(): array
@@ -745,6 +1002,12 @@ final class CustomerPortalRepository
         if(!$dueDate||$dueDate->format('Y-m-d')!==(string)$data['due_date'])throw new \InvalidArgumentException('Please select a valid due date.');
         if(empty($data['description']))throw new \InvalidArgumentException('Invoice description is required.');
         if(!in_array($data['invoice_type'],['subscription','service'],true))throw new \InvalidArgumentException('Invalid invoice type.');
+        $plan=null;
+        if($data['invoice_type']==='subscription'&&empty($data['subscription_id'])){
+            $plan=$this->plan((int)($data['plan_id']??0));
+            if(!$plan)throw new \InvalidArgumentException('Please select an active subscription plan.');
+            if($this->one("SELECT id FROM customer_subscriptions WHERE customer_id=? AND status='active' LIMIT 1",[$customerId]))throw new \InvalidArgumentException('This partner already has an active membership.');
+        }
         if(!empty($data['subscription_id'])&&!$this->one('SELECT id FROM customer_subscriptions WHERE id=? AND customer_id=?',[(int)$data['subscription_id'],$customerId])){
             throw new \InvalidArgumentException('The selected subscription does not belong to this customer.');
         }
@@ -757,11 +1020,20 @@ final class CustomerPortalRepository
         $publicToken=bin2hex(random_bytes(32));
         $this->db->beginTransaction();
         try{
+            $subscriptionId=(int)($data['subscription_id']??0);
+            if($data['invoice_type']==='subscription'&&$subscriptionId===0&&$plan){
+                $months=$this->cycleMonths((string)$plan['billing_cycle']);
+                $this->db->prepare("INSERT INTO customer_subscriptions (customer_id,plan_id,status,starts_at,expires_at,amount) VALUES (?,?,'pending',CURDATE(),DATE_ADD(CURDATE(),INTERVAL ? MONTH),?)")
+                    ->execute([$customerId,(int)$plan['id'],$months,(float)$plan['price']]);
+                $subscriptionId=(int)$this->db->lastInsertId();
+            }
             $this->db->prepare('INSERT INTO customer_invoices (customer_id,subscription_id,service_request_id,invoice_number,public_token,invoice_type,billing_cycle,subtotal,taxable_amount,cgst,sgst,total_amount,status,issue_date,due_date,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,"issued",CURDATE(),?,?,?)')->execute([
-                $customerId,$data['subscription_id']?:null,$data['service_request_id']?:null,$number,$publicToken,$data['invoice_type'],$data['billing_cycle']?:null,$subtotal,$subtotal,$cgst,$sgst,$total,$data['due_date'],$data['notes']?:null,$adminId
+                $customerId,$subscriptionId?:null,$data['service_request_id']?:null,$number,$publicToken,$data['invoice_type'],$plan['billing_cycle']??($data['billing_cycle']?:null),$subtotal,$subtotal,$cgst,$sgst,$total,$data['due_date'],$data['notes']?:null,$adminId
             ]);
             $id=(int)$this->db->lastInsertId();
             $this->db->prepare('INSERT INTO customer_invoice_items (invoice_id,description,quantity,unit_price,gst_rate,line_total) VALUES (?,?,1,?,?,?)')->execute([$id,$data['description'],$subtotal,$gstRate,$total]);
+            $this->db->prepare('INSERT INTO customer_notifications (customer_id,type,title,message,action_url) VALUES (?,"invoice","New invoice issued",?,?)')->execute([$customerId,'Invoice '.$number.' for ₹'.number_format($total,2).' has been issued.','/customer/billing/invoices/'.$id]);
+            $this->db->prepare('INSERT INTO customer_activity_logs (customer_id,actor_id,action,subject_type,subject_id,description) VALUES (?,?,?,?,?,?)')->execute([$customerId,$adminId,'invoice_issued','invoice',$id,'A new invoice was issued by the Udyam team.']);
             $this->db->commit();return $id;
         }catch(\Throwable $e){$this->db->rollBack();throw $e;}
     }
@@ -771,7 +1043,7 @@ final class CustomerPortalRepository
         $this->db->beginTransaction();
         try{
             $invoice=$this->one(
-                "SELECT id,total_amount,paid_amount,status FROM customer_invoices
+                "SELECT id,subscription_id,total_amount,paid_amount,status FROM customer_invoices
                  WHERE id=? AND customer_id=? AND status NOT IN ('cancelled','refunded') LIMIT 1 FOR UPDATE",
                 [(int)$data['invoice_id'],$customerId]
             );
@@ -786,8 +1058,38 @@ final class CustomerPortalRepository
             ]);
             $id=(int)$this->db->lastInsertId();
             $this->db->prepare("UPDATE customer_invoices SET paid_amount=paid_amount+?,status=IF(paid_amount+?>=total_amount,'paid','partial'),paid_at=IF(paid_amount+?>=total_amount,NOW(),paid_at) WHERE id=? AND customer_id=?")->execute([$amount,$amount,$amount,$data['invoice_id'],$customerId]);
+            if($amount >= $outstanding && !empty($invoice['subscription_id'])){
+                $this->db->prepare('UPDATE customer_subscriptions SET status="active",starts_at=CURDATE() WHERE id=? AND customer_id=? AND status="pending"')->execute([(int)$invoice['subscription_id'],$customerId]);
+                $this->db->prepare('INSERT INTO customer_notifications (customer_id,type,title,message,action_url) VALUES (?,"subscription","Membership activated","Your payment was confirmed and your subscription is now active.","/customer/subscription")')->execute([$customerId]);
+            }
+            $this->db->prepare('INSERT INTO customer_notifications (customer_id,type,title,message,action_url) VALUES (?,"invoice","Payment recorded",?,?)')->execute([$customerId,'A payment of ₹'.number_format($amount,2).' has been recorded against your invoice.','/customer/billing/invoices/'.$data['invoice_id']]);
+            $this->db->prepare('INSERT INTO customer_activity_logs (customer_id,actor_id,action,subject_type,subject_id,description) VALUES (?,?,?,?,?,?)')->execute([$customerId,$adminId,'payment_recorded','payment',$id,'A payment was recorded by the Udyam team.']);
             $this->db->commit();return $id;
         }catch(\Throwable $e){if($this->db->inTransaction())$this->db->rollBack();throw $e;}
+    }
+
+    public function activatePaidInvoiceSubscription(int $customerId,int $invoiceId,int $planId,int $adminId): void
+    {
+        $plan=$this->plan($planId);if(!$plan)throw new \InvalidArgumentException('Please select an active subscription plan.');
+        $this->db->beginTransaction();
+        try{
+            $invoice=$this->one('SELECT * FROM customer_invoices WHERE id=? AND customer_id=? LIMIT 1 FOR UPDATE',[$invoiceId,$customerId]);
+            if(!$invoice||$invoice['status']!=='paid')throw new \InvalidArgumentException('Only fully paid invoices can activate a membership.');
+            if(!empty($invoice['subscription_id']))throw new \InvalidArgumentException('This invoice is already linked to a membership.');
+            if($this->one("SELECT id FROM customer_subscriptions WHERE customer_id=? AND status='active' LIMIT 1",[$customerId]))throw new \InvalidArgumentException('This partner already has an active membership.');
+            $months=$this->cycleMonths((string)$plan['billing_cycle']);
+            $this->db->prepare("INSERT INTO customer_subscriptions (customer_id,plan_id,status,starts_at,expires_at,amount) VALUES (?,?,'active',CURDATE(),DATE_ADD(CURDATE(),INTERVAL ? MONTH),?)")->execute([$customerId,$planId,$months,(float)$plan['price']]);
+            $subscriptionId=(int)$this->db->lastInsertId();
+            $this->db->prepare('UPDATE customer_invoices SET subscription_id=?,invoice_type="subscription",billing_cycle=? WHERE id=?')->execute([$subscriptionId,$plan['billing_cycle'],$invoiceId]);
+            $this->db->prepare('INSERT INTO customer_notifications (customer_id,type,title,message,action_url) VALUES (?,"subscription","Membership activated","Your membership has been activated by the Udyam team.","/customer/subscription")')->execute([$customerId]);
+            $this->db->prepare('INSERT INTO customer_activity_logs (customer_id,actor_id,action,subject_type,subject_id,description) VALUES (?,?,?,?,?,?)')->execute([$customerId,$adminId,'subscription_activated','subscription',$subscriptionId,'Membership activated against paid invoice '.$invoice['invoice_number'].'.']);
+            $this->db->commit();
+        }catch(\Throwable $e){if($this->db->inTransaction())$this->db->rollBack();throw $e;}
+    }
+
+    private function cycleMonths(string $cycle): int
+    {
+        return ['monthly'=>1,'quarterly'=>3,'half_yearly'=>6,'yearly'=>12,'one_time'=>1200][$cycle]??12;
     }
 
     public function bridgeLegacyRecord(string $module,int $recordId,array $data,string $status):void
@@ -845,7 +1147,7 @@ final class CustomerPortalRepository
 
     public function updateProfile(int $customerId, array $data): void
     {
-        $fields = ['company_name','mobile','gst_number','pan_number','address_line_1','address_line_2','city','state','postal_code','country','contact_person','business_type','preferred_communication'];
+        $fields = ['company_name','mobile','gst_number','pan_number','address_line_1','address_line_2','city','state','postal_code','country','contact_person','business_type','annual_turnover_range','preferred_communication'];
         $assignments = [];
         $params = ['id' => $customerId];
         foreach ($fields as $field) {
@@ -853,6 +1155,12 @@ final class CustomerPortalRepository
             $params[$field] = $data[$field] ?? null;
         }
         $this->db->prepare('UPDATE customer_profiles SET ' . implode(',', $assignments) . ' WHERE user_id=:id')->execute($params);
+        $profile=$this->one('SELECT customer_record_id FROM customer_profiles WHERE user_id=? LIMIT 1',[$customerId]);
+        if(!empty($profile['customer_record_id'])){
+            $record=$this->one('SELECT data FROM admin_records WHERE id=? LIMIT 1',[(int)$profile['customer_record_id']]);$recordData=json_decode((string)($record['data']??''),true)?:[];
+            $recordData=array_merge($recordData,['company'=>$data['company_name']??null,'phone'=>$data['mobile']??null,'state'=>$data['state']??null,'annual_turnover_range'=>$data['annual_turnover_range']??null]);
+            $this->db->prepare('UPDATE admin_records SET data=?,updated_at=NOW() WHERE id=?')->execute([json_encode($recordData,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),(int)$profile['customer_record_id']]);
+        }
     }
 
     public function hasActiveSubscription(int $customerId): bool
@@ -862,6 +1170,79 @@ final class CustomerPortalRepository
              AND (expires_at IS NULL OR expires_at >= CURDATE()) LIMIT 1",
             [$customerId]
         ) !== null;
+    }
+
+    public function currentSubscription(int $customerId): ?array
+    {
+        return $this->one(
+            "SELECT cs.*,sp.name plan_name,sp.billing_cycle,sp.benefits,sp.description
+             FROM customer_subscriptions cs JOIN subscription_plans sp ON sp.id=cs.plan_id
+             WHERE cs.customer_id=? AND cs.status IN ('active','suspended')
+             ORDER BY FIELD(cs.status,'active','suspended'),cs.updated_at DESC LIMIT 1",
+            [$customerId]
+        );
+    }
+
+    public function subscriptionRequests(int $customerId): array
+    {
+        return $this->all(
+            "SELECT sr.*,sp.name plan_name FROM subscription_requests sr
+             JOIN customer_subscriptions cs ON cs.id=sr.subscription_id
+             JOIN subscription_plans sp ON sp.id=cs.plan_id
+             WHERE sr.customer_id=? ORDER BY sr.created_at DESC",
+            [$customerId]
+        );
+    }
+
+    public function requestSubscriptionAction(int $customerId, int $subscriptionId, string $type, string $reason): int
+    {
+        if (!in_array($type, ['pause','resume','cancellation'], true)) throw new \InvalidArgumentException('Invalid subscription request.');
+        $subscription = $this->one('SELECT id,status FROM customer_subscriptions WHERE id=? AND customer_id=? LIMIT 1', [$subscriptionId, $customerId]);
+        if (!$subscription) throw new \InvalidArgumentException('Subscription not found.');
+        if ($type === 'resume' && $subscription['status'] !== 'suspended') throw new \InvalidArgumentException('Only paused subscriptions can be resumed.');
+        if ($type !== 'resume' && $subscription['status'] !== 'active') throw new \InvalidArgumentException('This subscription is no longer active.');
+        if ($this->one("SELECT id FROM subscription_requests WHERE subscription_id=? AND request_type=? AND status='pending' LIMIT 1", [$subscriptionId, $type])) {
+            throw new \InvalidArgumentException('A request of this type is already awaiting review.');
+        }
+        $statement = $this->db->prepare('INSERT INTO subscription_requests (customer_id,subscription_id,request_type,reason) VALUES (?,?,?,?)');
+        $statement->execute([$customerId, $subscriptionId, $type, $reason ?: null]);
+        return (int) $this->db->lastInsertId();
+    }
+
+    public function adminSubscriptionRequests(string $status = 'pending'): array
+    {
+        $where = in_array($status, ['pending','approved','rejected','cancelled'], true) ? ' AND sr.status=?' : '';
+        return $this->all(
+            "SELECT sr.*,sp.name plan_name,u.first_name,u.last_name,u.email,cp.company_name
+             FROM subscription_requests sr JOIN customer_subscriptions cs ON cs.id=sr.subscription_id
+             JOIN subscription_plans sp ON sp.id=cs.plan_id JOIN users u ON u.id=sr.customer_id
+             LEFT JOIN customer_profiles cp ON cp.user_id=u.id WHERE 1=1{$where} ORDER BY sr.created_at DESC",
+            $where === '' ? [] : [$status]
+        );
+    }
+
+    public function reviewSubscriptionRequest(int $requestId, bool $approve, string $note, int $adminId): ?array
+    {
+        $this->db->beginTransaction();
+        try {
+            $request = $this->one('SELECT * FROM subscription_requests WHERE id=? AND status="pending" LIMIT 1 FOR UPDATE', [$requestId]);
+            if (!$request) { $this->db->rollBack(); return null; }
+            $status = $approve ? 'approved' : 'rejected';
+            $this->db->prepare('UPDATE subscription_requests SET status=?,admin_note=?,reviewed_by=?,reviewed_at=NOW() WHERE id=?')->execute([$status, $note ?: null, $adminId, $requestId]);
+            if ($approve) {
+                $subscriptionStatus = $request['request_type'] === 'cancellation' ? 'cancelled' : ($request['request_type'] === 'pause' ? 'suspended' : 'active');
+                $this->db->prepare('UPDATE customer_subscriptions SET status=? WHERE id=?')->execute([$subscriptionStatus, $request['subscription_id']]);
+            }
+            $title = 'Subscription request ' . ($approve ? 'approved' : 'rejected');
+            $message = 'Your ' . $request['request_type'] . ' request has been ' . ($approve ? 'approved.' : 'rejected.') . ($note ? ' ' . $note : '');
+            $this->db->prepare('INSERT INTO customer_notifications (customer_id,type,title,message,action_url) VALUES (?,"subscription",?,?,"/customer/subscription")')->execute([$request['customer_id'], $title, $message]);
+            $this->db->prepare('INSERT INTO customer_activity_logs (customer_id,actor_id,action,subject_type,subject_id,description) VALUES (?,?,?,?,?,?)')->execute([$request['customer_id'],$adminId,'subscription_request_reviewed','subscription_request',$requestId,$message]);
+            $this->db->commit();
+            return ['customer_id' => (int) $request['customer_id'], 'request_type' => (string) $request['request_type'], 'approved' => $approve];
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            throw $e;
+        }
     }
 
     /**
@@ -877,6 +1258,7 @@ final class CustomerPortalRepository
         $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query) . '%';
         $per = max(3, (int) ceil($limit / 5));
         $results = [];
+        $subscriptionIntent = (bool) preg_match('/\b(subscription|subscriptions|plan|plans|membership|memberships|monthly|annual|yearly|renewal)\b/i', $query);
 
         foreach ($this->all(
             "SELECT r.id,r.application_number,r.project_name,r.status,a.title service_title
@@ -904,6 +1286,77 @@ final class CustomerPortalRepository
             [$customerId, $like]
         ) as $row) {
             $results[] = ['group' => 'Billing', 'icon' => 'receipt-indian-rupee', 'title' => (string) $row['invoice_number'], 'meta' => '₹' . number_format((float) $row['total_amount'], 2) . ' · ' . ucfirst((string) $row['status']), 'url' => url('/customer/billing/invoices/' . (int) $row['id'])];
+        }
+
+        $subscriptionSql = "SELECT cs.id,cs.status,cs.expires_at,sp.name,sp.billing_cycle,sp.category,sp.subtitle
+            FROM customer_subscriptions cs JOIN subscription_plans sp ON sp.id=cs.plan_id
+            WHERE cs.customer_id=?";
+        $subscriptionParams = [$customerId];
+        if (!$subscriptionIntent) {
+            $subscriptionSql .= " AND (sp.name LIKE ? ESCAPE '\\\\' OR sp.category LIKE ? ESCAPE '\\\\'
+                OR sp.subtitle LIKE ? ESCAPE '\\\\' OR sp.billing_cycle LIKE ? ESCAPE '\\\\')";
+            array_push($subscriptionParams, $like, $like, $like, $like);
+        }
+        $subscriptionSql .= " ORDER BY FIELD(cs.status,'active','pending','expired','cancelled','suspended'), cs.updated_at DESC LIMIT {$per}";
+        $seenSubscriptionPlans = [];
+        foreach ($this->all($subscriptionSql, $subscriptionParams) as $row) {
+            $planKey = (string) $row['name'] . '|' . (string) $row['billing_cycle'];
+            if (isset($seenSubscriptionPlans[$planKey])) {
+                continue;
+            }
+            $seenSubscriptionPlans[$planKey] = true;
+            $results[] = [
+                'group' => 'Subscriptions', 'icon' => 'badge-indian-rupee', 'title' => (string) $row['name'],
+                'meta' => ucfirst((string) $row['status']) . ' · ' . ucfirst(str_replace('_', ' ', (string) $row['billing_cycle']))
+                    . (!empty($row['expires_at']) ? ' · Renews ' . date('d M Y', strtotime((string) $row['expires_at'])) : ''),
+                'url' => url('/customer/plans'),
+            ];
+        }
+
+        $planSql = "SELECT id,name,category,subtitle,billing_cycle,price
+            FROM subscription_plans WHERE status='active' AND deleted_at IS NULL";
+        $planParams = [];
+        if (!$subscriptionIntent) {
+            $planSql .= " AND (name LIKE ? ESCAPE '\\\\' OR category LIKE ? ESCAPE '\\\\'
+                OR subtitle LIKE ? ESCAPE '\\\\' OR description LIKE ? ESCAPE '\\\\' OR billing_cycle LIKE ? ESCAPE '\\\\')";
+            $planParams = [$like, $like, $like, $like, $like];
+        }
+        $planSql .= " ORDER BY sort_order,name LIMIT {$per}";
+        foreach ($this->all($planSql, $planParams) as $row) {
+            $results[] = [
+                'group' => 'Available Plans', 'icon' => 'sparkles', 'title' => (string) $row['name'],
+                'meta' => '₹' . number_format((float) $row['price'], 0) . ' · '
+                    . ucfirst(str_replace('_', ' ', (string) $row['billing_cycle']))
+                    . (!empty($row['subtitle']) ? ' · ' . (string) $row['subtitle'] : ''),
+                'url' => url('/customer/plans'),
+            ];
+        }
+
+        foreach ($this->all(
+            "SELECT id,title FROM admin_records
+             WHERE module='services' AND status IN ('published','active') AND deleted_at IS NULL
+               AND title LIKE ? ESCAPE '\\\\' ORDER BY sort_order,title LIMIT {$per}",
+            [$like]
+        ) as $row) {
+            $results[] = [
+                'group' => 'Services', 'icon' => 'briefcase-business', 'title' => (string) $row['title'],
+                'meta' => 'View service and apply online', 'url' => url('/customer/services/' . (int) $row['id'] . '/apply'),
+            ];
+        }
+
+        foreach ($this->all(
+            "SELECT p.id,p.transaction_id,p.amount,p.status,p.payment_date,i.invoice_number
+             FROM customer_payments p JOIN customer_invoices i ON i.id=p.invoice_id
+             WHERE p.customer_id=? AND (p.transaction_id LIKE ? ESCAPE '\\\\' OR i.invoice_number LIKE ? ESCAPE '\\\\')
+             ORDER BY p.payment_date DESC LIMIT {$per}",
+            [$customerId, $like, $like]
+        ) as $row) {
+            $results[] = [
+                'group' => 'Payments', 'icon' => 'circle-check-big',
+                'title' => (string) ($row['transaction_id'] ?: $row['invoice_number']),
+                'meta' => '₹' . number_format((float) $row['amount'], 2) . ' · ' . ucfirst((string) $row['status']),
+                'url' => url('/customer/billing/payments'),
+            ];
         }
 
         foreach ($this->all(

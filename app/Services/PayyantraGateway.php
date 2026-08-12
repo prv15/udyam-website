@@ -26,8 +26,10 @@ final class PayyantraGateway
             'customerName'=>trim(($customer['first_name']??'').' '.($customer['last_name']??'')) ?: 'Udyam Customer',
             'customerEmail'=>$customer['email']??'',
             'customerPhone'=>$this->phone($customer['mobile']??''),
-            'notifyUrl'=>$this->absolute('/payments/payyantra/webhook'),
-            'returnUrl'=>$this->absolute('/customer/payments/return?order='.$checkout['order_token']),
+            'notifyUrl'=>$this->webhookUrl(),
+            // Use a provider-neutral parameter name so gateway-added `order` fields cannot
+            // overwrite our local random token on the browser return URL.
+            'returnUrl'=>$this->absolute('/customer/payments/return?local_order='.$checkout['order_token']),
             'allowedPaymentMethods'=>['UPI','CREDIT_CARD','DEBIT_CARD','INTERNET_BANKING'],
         ];
 
@@ -49,6 +51,7 @@ final class PayyantraGateway
         $checkoutUrl=(string)($data['checkoutUrl']??'');
         $transactionId=(string)($data['transactionId']??'');
         if($orderId===''||$checkoutUrl==='')throw new \RuntimeException('PayYantra response is missing the order id or checkout URL.');
+        if(filter_var($checkoutUrl,FILTER_VALIDATE_URL)===false||!in_array(strtolower((string)parse_url($checkoutUrl,PHP_URL_SCHEME)),['https','http'],true))throw new \RuntimeException('PayYantra returned an invalid checkout URL.');
         return [
             'provider_order_id'=>$orderId,'provider_session_id'=>$transactionId?:null,'checkout_url'=>$checkoutUrl,
             'request'=>$request,'response'=>$response,
@@ -61,20 +64,66 @@ final class PayyantraGateway
      * since PayYantra's webhook docs do not specify a signature we can verify. Both the webhook
      * handler and the customer return page call this before crediting any payment.
      */
-    public function verifyOrder(string $providerOrderId): array
+    public function verifyOrder(string $providerOrderId, ?string $providerTransactionId = null, ?string $providerMerchantOrderId = null): array
     {
         if($this->isDemo()){
             return ['status'=>'UNKNOWN','order_id'=>$providerOrderId,'transaction_id'=>null,'raw'=>[]];
         }
-        $response=$this->call('GET','/api/pay/status/'.rawurlencode($providerOrderId));
-        $data=$response['data']??[];
-        if(!is_array($data))$data=[];
-        return [
-            'status'=>strtoupper((string)($data['status']??'')),
-            'order_id'=>(string)($data['orderId']??$providerOrderId),
-            'transaction_id'=>(string)($data['pspOrderId']??$data['transactionPublicId']??'')?:null,
-            'raw'=>$data,
-        ];
+        // PayYantra's status endpoint is transaction-oriented. Its create-order response gives
+        // us both an orderId and transactionId, so try the transaction id first and retain the
+        // order id as a compatibility fallback for older merchant accounts.
+        $identifiers=array_values(array_unique(array_filter([
+            trim((string)$providerTransactionId),trim((string)$providerOrderId),trim((string)$providerMerchantOrderId),
+        ],static fn(string $value):bool=>$value!=='')));
+        $lastException=null;$unknown=null;
+        foreach($identifiers as $identifier){
+            $paths=[
+                '/api/pay/status/'.rawurlencode($identifier),
+                '/api/v2/merchant/orders/'.rawurlencode($identifier),
+            ];
+            foreach($paths as $path){try{
+                $response=$this->call('GET',$path);
+                $data=is_array($response['data']??null)?$response['data']:$response;
+                $status=$this->findValue($data,['paymentStatus','transactionStatus','orderStatus','payment_status','transaction_status','order_status','status','state']);
+                $result=[
+                    'status'=>$this->normalizeStatus($status),
+                    'order_id'=>(string)($this->findValue($data,['orderId','order_id'])?:$providerOrderId),
+                    'transaction_id'=>(string)($this->findValue($data,['pspOrderId','transactionPublicId','transactionId','transaction_id','txnId','paymentId','utr'])?:$providerTransactionId)?:null,
+                    'raw'=>$data,
+                ];
+                if($this->isSuccessfulStatus($result['status'])||$this->isFailedStatus($result['status']))return $result;
+                $unknown=$result;
+            }catch(\Throwable $exception){
+                $lastException=$exception;
+            }}
+        }
+        if($unknown!==null)return $unknown;
+        if($lastException!==null)throw $lastException;
+        throw new \RuntimeException('PayYantra status verification requires an order or transaction id.');
+    }
+
+    public function isSuccessfulStatus(string $status): bool
+    {
+        return in_array($this->normalizeStatus($status),[
+            'SUCCESS','SUCCESSFUL','PAID','CAPTURED','COMPLETED','COMPLETE',
+            'PAYMENT_SUCCESS','PAYMENT_SUCCESSFUL','TXN_SUCCESS','TRANSACTION_SUCCESS',
+        ],true);
+    }
+
+    public function isFailedStatus(string $status): bool
+    {
+        return in_array($this->normalizeStatus($status),[
+            'FAILED','FAILURE','DECLINED','CANCELLED','CANCELED','EXPIRED',
+            'PAYMENT_FAILED','TXN_FAILED','TRANSACTION_FAILED',
+        ],true);
+    }
+
+    public function merchantOrderIdFromStoredResponse(mixed $payload): ?string
+    {
+        if(is_string($payload))$payload=json_decode($payload,true);
+        if(!is_array($payload))return null;
+        $value=$this->findValue($payload,['merchantOrderId','merchant_order_id']);
+        return $value===null||$value===''?null:(string)$value;
     }
 
     private function call(string $method,string $path,?array $body=null): array
@@ -144,6 +193,27 @@ final class PayyantraGateway
         return strtolower((string)($_ENV['PAYYANTRA_MODE']??'demo'))==='live' ? self::LIVE_BASE_URL : self::UAT_BASE_URL;
     }
 
+    private function normalizeStatus(mixed $status): string
+    {
+        $normalized=strtoupper(trim((string)$status));
+        $normalized=preg_replace('/[^A-Z0-9]+/','_',$normalized)??$normalized;
+        return trim($normalized,'_')?:'UNKNOWN';
+    }
+
+    private function findValue(array $payload,array $keys): mixed
+    {
+        foreach($keys as $key){
+            if(array_key_exists($key,$payload)&&$payload[$key]!==''&&$payload[$key]!==null)return $payload[$key];
+        }
+        foreach($payload as $value){
+            if(is_array($value)){
+                $found=$this->findValue($value,$keys);
+                if($found!==null&&$found!=='')return $found;
+            }
+        }
+        return null;
+    }
+
     private function phone(string $raw): string
     {
         $digits=preg_replace('/\D+/','',$raw) ?? '';
@@ -153,5 +223,12 @@ final class PayyantraGateway
     private function absolute(string $path): string
     {
         return App::url().'/'.ltrim($path,'/');
+    }
+
+    private function webhookUrl(): string
+    {
+        $url=$this->absolute('/payments/payyantra/webhook');
+        $secret=trim((string)($_ENV['PAYYANTRA_WEBHOOK_SECRET']??''));
+        return $secret===''?$url:$url.'?key='.rawurlencode($secret);
     }
 }

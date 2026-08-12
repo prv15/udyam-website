@@ -8,13 +8,15 @@ use App\Core\Request;
 use App\Core\Session;
 use App\Repositories\CustomerPortalRepository;
 use App\Services\PayyantraGateway;
+use App\Services\NotificationService;
 
 final class PortalController extends CustomerController
 {
     public function __construct(
         private readonly CustomerPortalRepository $portal,
         private readonly Request $request,
-        private readonly PayyantraGateway $gateway
+        private readonly PayyantraGateway $gateway,
+        private readonly NotificationService $notifications
     )
     {
         parent::__construct();
@@ -25,11 +27,39 @@ final class PortalController extends CustomerController
         $this->render('dashboard', ['title'=>'Dashboard','data'=>$this->portal->dashboard($this->id())]);
     }
 
+    public function tenders(): void
+    {
+        if(!$this->portal->hasActiveSubscription($this->id())){$this->redirectInfo('/customer/plans','Choose a subscription plan to access notices and tenders.');}
+        $perPage=$this->perPage();$page=max(1,$this->request->integer('page',1));
+        $filters=[
+            'q'=>mb_substr($this->request->string('q'),0,120),
+            'region'=>mb_substr($this->request->string('region'),0,120),
+            'invited_by'=>mb_substr($this->request->string('invited_by'),0,160),
+            'sort'=>in_array($this->request->string('sort','latest'),['latest','deadline','expired','ongoing'],true)?$this->request->string('sort','latest'):'latest',
+        ];
+        $total=$this->portal->tendersTotal($filters);$pages=max(1,(int)ceil($total/$perPage));$page=min($page,$pages);
+        $this->render('tenders',['title'=>'Notices & Tenders','tenders'=>$this->portal->tendersForCustomer($page,$perPage,$filters),'total'=>$total,'page'=>$page,'perPage'=>$perPage,'filters'=>$filters,'filterOptions'=>$this->portal->tenderFilterOptions()]);
+    }
+
+    public function tender(int $id): void
+    {
+        if(!$this->portal->hasActiveSubscription($this->id())){$this->redirectInfo('/customer/plans','Choose a subscription plan to access notices and tenders.');}
+        $tender=$this->portal->tenderForCustomer($id);if(!$tender)$this->abort404();
+    $fullTitle=(string)$tender['title'];$words=preg_split('/\s+/',trim($fullTitle))?:[];$shortTitle=count($words)>7?implode(' ',array_slice($words,0,7)).'…':$fullTitle;
+        $this->render('tender',['title'=>$shortTitle,'tender'=>$tender,'shortTitle'=>$shortTitle,'fullTitle'=>$fullTitle]);
+    }
+
+    private function perPage(): int
+    {
+        $value=$this->request->integer('per_page',10);return in_array($value,[10,50,100],true)?$value:10;
+    }
+
     public function search(): void
     {
         header('Content-Type: application/json');
+        header('Cache-Control: private, no-store, max-age=0');
         try {
-            $query = $this->request->string('q');
+            $query = mb_substr($this->request->string('q'), 0, 120);
             $hasSubscription = $this->portal->hasActiveSubscription($this->id());
             $results = $this->portal->search($this->id(), $query, $hasSubscription);
             // JSON_INVALID_UTF8_SUBSTITUTE: a single stray non-UTF-8 byte in any matched title
@@ -60,25 +90,48 @@ final class PortalController extends CustomerController
         $this->portal->updateProfile($this->id(), $this->request->only([
             'company_name','mobile','gst_number','pan_number','address_line_1','address_line_2','city',
             'state','postal_code','country','contact_person','business_type','preferred_communication',
+            'annual_turnover_range',
         ]));
         $this->portal->log($this->id(),'profile_updated','Customer profile updated.');
+        $this->notifications->notifyAdmin('profile', 'Partner profile updated', 'A partner updated their company profile.', '/admin/customers', $this->id(), 'profile', $this->id());
         $this->redirectSuccess('/customer/profile','Profile updated successfully.');
     }
 
     public function plans(): void
     {
-        $this->render('plans', ['title'=>'Subscription Plans','plans'=>$this->portal->plans()]);
+        $this->render('plans', ['title'=>'Subscription Plans','plans'=>$this->portal->plans(),'subscription'=>$this->portal->currentSubscription($this->id())]);
+    }
+
+    public function subscription(): void
+    {
+        $this->reconcilePendingPayment();
+        $this->render('subscription', ['title' => 'My Subscription', 'subscription' => $this->portal->currentSubscription($this->id()), 'requests' => $this->portal->subscriptionRequests($this->id())]);
+    }
+
+    public function requestSubscriptionAction(): never
+    {
+        $this->csrf();
+        try {
+            $requestId = $this->portal->requestSubscriptionAction($this->id(), $this->request->integer('subscription_id'), $this->request->string('request_type'), $this->request->string('reason'));
+            $this->portal->log($this->id(), 'subscription_request', 'Subscription ' . $this->request->string('request_type') . ' request submitted.', 'subscription_request', $requestId);
+            $this->notifications->notifyAdmin('subscription', 'Subscription ' . $this->request->string('request_type') . ' request', 'A partner has requested a subscription ' . $this->request->string('request_type') . '.', '/admin/subscription-requests', $this->id(), 'subscription_request', $requestId);
+            $this->redirectSuccess('/customer/subscription', 'Your request has been sent to the Udyam team for review.');
+        } catch (\InvalidArgumentException $e) {
+            $this->redirectError('/customer/subscription', $e->getMessage());
+        }
     }
 
     public function subscribe(int $id): never
     {
         $this->csrf();
+        if($this->request->string('disclaimer_accepted')!=='1')$this->redirectError('/customer/plans','Please read and accept the subscription terms before continuing to payment.');
         $checkout=null;
         try{
             $checkout=$this->portal->startSubscriptionCheckout($this->id(),$id);
-            $gateway=$this->gateway->createOrder($checkout,$this->customer);
-            $this->portal->attachGatewayOrder((int)$checkout['order_id'],$gateway);
+            if(!empty($checkout['resume'])&&!empty($checkout['checkout_url'])){$gateway=['checkout_url'=>$checkout['checkout_url']];}
+            else{$gateway=$this->gateway->createOrder($checkout,$this->customer);$this->portal->attachGatewayOrder((int)$checkout['order_id'],$gateway);}
             $this->portal->log($this->id(),'subscription_checkout_started','Subscription checkout started.','subscription',(int)$checkout['subscription_id']);
+            $this->notifications->notifyAdmin('subscription', 'New subscription checkout', 'A partner has started checkout for ' . (string) $checkout['plan']['name'] . '.', '/admin/customers', $this->id(), 'subscription', (int) $checkout['subscription_id']);
             header('Location: '.$gateway['checkout_url']);
             exit;
         }catch(\InvalidArgumentException $e){
@@ -114,6 +167,7 @@ final class PortalController extends CustomerController
         $this->csrf();
         $requestId = $this->portal->applyForService($this->id(),$id,$this->request->string('project_name'),$this->request->string('remarks'));
         $this->portal->log($this->id(),'application_submitted','Service application submitted.','service_request',$requestId);
+        $this->notifications->notifyAdmin('application', 'New service application', 'A partner submitted a new service application.', '/admin/applications', $this->id(), 'service_request', $requestId);
         $this->redirectSuccess('/customer/applications/' . $requestId,'Application submitted successfully.');
     }
 
@@ -153,6 +207,7 @@ final class PortalController extends CustomerController
             'stored_name'=>$stored,'file_path'=>'/' . $folder . '/' . $stored,'mime_type'=>$mime,'file_size'=>(int)$file['size'],
         ]);
         $this->portal->log($this->id(),'document_uploaded','Document uploaded.','document',$id);
+        $this->notifications->notifyAdmin('document', 'New partner document', 'A partner uploaded a document for review.', '/admin/documents', $this->id(), 'document', $id);
         $this->redirectSuccess('/customer/documents','Document uploaded securely.');
     }
 
@@ -191,6 +246,22 @@ final class PortalController extends CustomerController
         $this->render('notifications', ['title'=>'Notifications','notifications'=>$this->portal->notifications($this->id())]);
     }
 
+    public function notificationFeed(): never
+    {
+        $items=array_slice($this->portal->notifications($this->id()),0,10);
+        foreach ($items as &$item) $item['action_url'] = !empty($item['action_url']) ? url((string) $item['action_url']) : url('/customer/notifications');
+        unset($item);
+        $unread=count(array_filter($items,static fn(array $item): bool => empty($item['read_at'])));
+        $this->json(['count'=>$unread,'notifications'=>$items]);
+    }
+
+    public function markAllNotifications(): never
+    {
+        $this->csrf();
+        $this->portal->markAllNotifications($this->id());
+        $this->json(['ok'=>true,'count'=>0]);
+    }
+
     public function notification(int $id): never
     {
         $this->csrf();
@@ -200,11 +271,13 @@ final class PortalController extends CustomerController
 
     public function billing(): void
     {
+        $this->reconcilePendingPayment();
         $this->render('billing', ['title'=>'Billing','summary'=>$this->portal->billingSummary($this->id()),'invoices'=>$this->portal->invoices($this->id()),'payments'=>$this->portal->payments($this->id())]);
     }
 
     public function invoices(): void
     {
+        $this->reconcilePendingPayment();
         $this->render('invoices', ['title'=>'Invoices','invoices'=>$this->portal->invoices($this->id())]);
     }
 
@@ -220,9 +293,58 @@ final class PortalController extends CustomerController
         $this->render('payments', ['title'=>'Payment History','payments'=>$this->portal->payments($this->id())]);
     }
 
+    private function reconcilePendingPayment(): void
+    {
+        if($this->gateway->isDemo())return;
+        $order=$this->portal->pendingPaymentOrderForCustomer($this->id());
+        if(!$order)return;
+        try{
+            $verified=$this->gateway->verifyOrder(
+                (string)$order['provider_order_id'],
+                (string)($order['provider_session_id']??''),
+                $this->gateway->merchantOrderIdFromStoredResponse($order['response_payload']??null)
+            );
+            $status=(string)$verified['status'];
+            if($this->gateway->isSuccessfulStatus($status)){
+                $transactionId=(string)($verified['transaction_id']?:('PY-'.$order['provider_order_id']));
+                $result=$this->portal->completePaymentOrder((int)$order['id'],$transactionId,['portal_reconciliation'=>$verified['raw']]);
+                if(!$result['already_paid']){
+                    $this->portal->log($this->id(),'payment_completed','PayYantra payment reconciled automatically.','invoice',(int)$result['invoice_id']);
+                    $this->notifications->notifyAdmin('payment','Payment received','A PayYantra payment was reconciled from the partner portal.','/admin/customers',$this->id(),'invoice',(int)$result['invoice_id']);
+                }
+                return;
+            }
+            if($this->gateway->isFailedStatus($status)){
+                $this->portal->failPaymentOrder((int)$order['id'],'PayYantra reported '.$status.'.',['portal_reconciliation'=>$verified['raw']]);
+            }
+        }catch(\Throwable $exception){
+            // Billing must remain available during a temporary gateway outage. The return page,
+            // webhook, or a later portal visit will retry reconciliation.
+            error_log('Portal payment reconciliation failed: '.$exception->getMessage());
+        }
+    }
+
     public function activity(): void
     {
         $this->render('activity', ['title'=>'Activity','activity'=>$this->portal->activity($this->id())]);
+    }
+
+    public function support(): void
+    {
+        $this->render('support', ['title' => 'Help & Support', 'tickets' => $this->portal->supportTickets($this->id())]);
+    }
+
+    public function submitSupport(): never
+    {
+        $this->csrf();
+        try {
+            $ticketId=$this->portal->createSupportTicket($this->id(),$this->request->string('topic','general'),$this->request->string('subject'),$this->request->string('message'));
+            $this->portal->log($this->id(),'support_ticket_created','Support request submitted.','support_ticket',$ticketId);
+            $this->notifications->notifyAdmin('support','New support request',$this->request->string('subject'),'/admin/notification-center',$this->id(),'support_ticket',$ticketId);
+            $this->redirectSuccess('/customer/support','Your support request was sent to the Udyam team. We will respond here and by email if needed.');
+        } catch (\InvalidArgumentException $e) {
+            $this->redirectError('/customer/support',$e->getMessage());
+        }
     }
 
     private function id(): int { return (int)$this->customer['id']; }

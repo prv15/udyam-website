@@ -19,7 +19,7 @@ final class DashboardService
             "SELECT COUNT(*) FROM users WHERE user_type = 'customer' AND status = 'active' AND deleted_at IS NULL"
         );
         $activeSubscriptions = $this->tableExists('customer_subscriptions')
-            ? $this->safeCount("SELECT COUNT(*) FROM customer_subscriptions WHERE status = 'active'")
+            ? $this->safeCount("SELECT COUNT(DISTINCT customer_id, plan_id) FROM customer_subscriptions WHERE status = 'active'")
             : 0;
         $outstanding = $this->tableExists('customer_invoices')
             ? $this->safeAmount(
@@ -113,6 +113,45 @@ final class DashboardService
         return $insights;
     }
 
+    /** Executive ERP metrics built only from the existing operational tables. */
+    public function erpOverview(): array
+    {
+        $customers = [
+            'total' => $this->safeCount("SELECT COUNT(*) FROM users WHERE user_type='customer' AND deleted_at IS NULL"),
+            'active' => $this->safeCount("SELECT COUNT(*) FROM users WHERE user_type='customer' AND status='active' AND deleted_at IS NULL"),
+            'inactive' => $this->safeCount("SELECT COUNT(*) FROM users WHERE user_type='customer' AND status<>'active' AND deleted_at IS NULL"),
+            'new' => $this->safeCount("SELECT COUNT(*) FROM users WHERE user_type='customer' AND deleted_at IS NULL AND created_at>=DATE_FORMAT(CURRENT_DATE,'%Y-%m-01')"),
+        ];
+        $subscriptions = $this->statusCounts('customer_subscriptions', ['active','pending','expired','cancelled','suspended']);
+        $applications = $this->statusCounts('customer_service_requests', ['submitted','under_review','approved','rejected','in_progress','completed']);
+        $payments = $this->statusCounts('customer_payments', ['pending','successful','failed']);
+        $documents = [
+            'today' => $this->tableExists('customer_documents') ? $this->safeCount('SELECT COUNT(*) FROM customer_documents WHERE DATE(created_at)=CURRENT_DATE AND deleted_at IS NULL') : 0,
+            'pending' => $this->tableExists('customer_documents') ? $this->safeCount("SELECT COUNT(*) FROM customer_documents WHERE status IN ('requested','uploaded') AND deleted_at IS NULL") : 0,
+            'missing' => $this->tableExists('customer_documents') ? $this->safeCount("SELECT COUNT(*) FROM customer_documents WHERE status='requested' AND deleted_at IS NULL") : 0,
+        ];
+        $revenue = [
+            'today' => $this->paymentAmount('payment_date>=CURDATE()'),
+            'week' => $this->paymentAmount('payment_date>=DATE_SUB(CURDATE(),INTERVAL 6 DAY)'),
+            'month' => $this->paymentAmount("payment_date>=DATE_FORMAT(CURRENT_DATE,'%Y-%m-01')"),
+            'year' => $this->paymentAmount("payment_date>=DATE_FORMAT(CURRENT_DATE,'%Y-01-01')"),
+        ];
+        $lastMonth = $this->paymentAmount("payment_date>=DATE_FORMAT(DATE_SUB(CURRENT_DATE,INTERVAL 1 MONTH),'%Y-%m-01') AND payment_date<DATE_FORMAT(CURRENT_DATE,'%Y-%m-01')");
+        $trend = $lastMonth > 0 ? round((($revenue['month'] - $lastMonth) / $lastMonth) * 100, 1) : 0.0;
+        return [
+            'customers' => $customers, 'subscriptions' => $subscriptions, 'applications' => $applications,
+            'payments' => $payments, 'documents' => $documents, 'revenue' => $revenue,
+            'revenueTrend' => $trend, 'renewalDue' => $this->tableExists('customer_subscriptions') ? $this->safeCount("SELECT COUNT(*) FROM customer_subscriptions WHERE status='active' AND expires_at BETWEEN CURRENT_DATE AND DATE_ADD(CURRENT_DATE,INTERVAL 30 DAY)") : 0,
+            'funding' => [
+                'tenders' => $this->moduleCountByStatuses('tenders', ['published','active']),
+                'notices' => $this->moduleCountByStatuses('tenders', ['published','active']),
+                'schemes' => $this->moduleCountByStatuses('focus-areas', ['published','active']),
+            ],
+            'customerGrowth' => $this->customerGrowthTrend(),
+            'paymentTrend' => $this->revenueTrend(),
+        ];
+    }
+
     public function revenueTrend(): array
     {
         $months = [];
@@ -152,7 +191,7 @@ final class DashboardService
         }
 
         return $this->safeRows(
-            "SELECT sp.name, sp.billing_cycle, COUNT(cs.id) subscriptions,
+            "SELECT sp.name, sp.billing_cycle, COUNT(DISTINCT cs.customer_id) subscriptions,
                     COALESCE(SUM(cs.amount),0) value
              FROM subscription_plans sp
              LEFT JOIN customer_subscriptions cs ON cs.plan_id = sp.id AND cs.status = 'active'
@@ -280,6 +319,35 @@ final class DashboardService
         return (int) $statement->fetchColumn();
     }
 
+    private function statusCounts(string $table, array $statuses): array
+    {
+        $result = array_fill_keys($statuses, 0);
+        if (!$this->tableExists($table)) return $result;
+        foreach ($this->safeRows("SELECT status,COUNT(*) total FROM {$table} GROUP BY status") as $row) {
+            if (array_key_exists((string) $row['status'], $result)) $result[(string) $row['status']] = (int) $row['total'];
+        }
+        return $result;
+    }
+
+    private function paymentAmount(string $condition): float
+    {
+        if (!$this->tableExists('customer_payments')) return 0.0;
+        return $this->safeAmount("SELECT COALESCE(SUM(amount),0) FROM customer_payments WHERE status='successful' AND {$condition}");
+    }
+
+    private function customerGrowthTrend(): array
+    {
+        $months = [];
+        for ($offset = 5; $offset >= 0; $offset--) {
+            $stamp = strtotime("-{$offset} months");
+            $months[date('Y-m', $stamp)] = ['label' => date('M', $stamp), 'value' => 0];
+        }
+        foreach ($this->safeRows("SELECT DATE_FORMAT(created_at,'%Y-%m') period,COUNT(*) total FROM users WHERE user_type='customer' AND deleted_at IS NULL AND created_at>=DATE_FORMAT(DATE_SUB(CURRENT_DATE,INTERVAL 5 MONTH),'%Y-%m-01') GROUP BY period") as $row) {
+            if (isset($months[(string) $row['period']])) $months[(string) $row['period']]['value'] = (int) $row['total'];
+        }
+        return ['labels' => array_column($months, 'label'), 'values' => array_column($months, 'value')];
+    }
+
     private function moduleCountByStatuses(string $module, array $statuses): int
     {
         $statuses = array_values(array_filter($statuses, 'is_string'));
@@ -341,9 +409,12 @@ final class DashboardService
     private function tableExists(string $table): bool
     {
         try {
-            $statement = $this->db->prepare('SHOW TABLES LIKE :table');
+            $statement = $this->db->prepare(
+                'SELECT COUNT(*) FROM information_schema.tables
+                 WHERE table_schema = DATABASE() AND table_name = :table'
+            );
             $statement->execute(['table' => $table]);
-            return (bool) $statement->fetchColumn();
+            return (int) $statement->fetchColumn() > 0;
         } catch (PDOException) {
             return false;
         }

@@ -25,7 +25,7 @@ final class PagesController extends AdminController
     public function index(): void
     {
         $currentPage = max(1, $this->request->integer('page', 1));
-        $perPage = 10;
+        $perPage = $this->perPage();
         $search = $this->request->string('search');
         $status = $this->request->string('status');
         if (!in_array($status, ['', 'draft', 'published', 'archived'], true)) {
@@ -46,6 +46,11 @@ final class PagesController extends AdminController
     public function create(): void
     {
         $this->renderForm([], 'create');
+    }
+
+    private function perPage(): int
+    {
+        $value=$this->request->integer('per_page',10);return in_array($value,[10,50,100],true)?$value:10;
     }
 
     public function store(): void

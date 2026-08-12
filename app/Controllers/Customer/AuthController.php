@@ -10,12 +10,14 @@ use App\Core\Session;
 use App\Middleware\CustomerGuestMiddleware;
 use App\Repositories\CustomerPortalRepository;
 use App\Services\CustomerAuthService;
+use App\Services\NotificationService;
 
 final class AuthController extends Controller
 {
     public function __construct(
         private readonly CustomerPortalRepository $customers,
         private readonly CustomerAuthService $auth,
+        private readonly NotificationService $notifications,
         private readonly Request $request
     ) {
     }
@@ -98,6 +100,7 @@ final class AuthController extends Controller
             error_log('Customer verification email failed: ' . $e->getMessage());
         }
         $this->customers->log($id, 'registration', 'Customer account created.');
+        $this->notifications->notifyAdmin('partner', 'New partner registered', $data['full_name'] . ' created a new partner portal account.', '/admin/customers', $id, 'customer', $id);
         Session::flash('pending_verification_email', $data['email']);
         $this->redirectSuccess('/customer/register', 'Account created. Please check your email to verify it.');
     }

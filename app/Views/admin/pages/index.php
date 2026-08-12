@@ -13,7 +13,7 @@
                 <option value="<?= $value ?>" <?= $status === $value ? 'selected' : '' ?>><?= $label ?></option>
             <?php endforeach; ?>
         </select>
-        <button class="btn btn-secondary" type="submit">Filter</button>
+        <button class="btn btn-secondary" type="submit">Filter</button><label class="table-page-size">Show <select name="per_page" onchange="this.form.submit()"><option value="10" <?= $perPage===10?'selected':'' ?>>10</option><option value="50" <?= $perPage===50?'selected':'' ?>>50</option><option value="100" <?= $perPage===100?'selected':'' ?>>100</option></select></label>
         <?php if ($search !== '' || $status !== ''): ?><a class="btn btn-secondary" href="<?= htmlspecialchars(url('/admin/pages')) ?>">Clear</a><?php endif; ?>
     </form>
 
@@ -43,7 +43,7 @@
 
     <?php if ($totalPages > 1): ?><nav class="pagination">
         <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-            <a class="<?= $i === $currentPage ? 'active' : '' ?>" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>"><?= $i ?></a>
+            <a class="<?= $i === $currentPage ? 'active' : '' ?>" href="?page=<?= $i ?>&per_page=<?= $perPage ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>"><?= $i ?></a>
         <?php endfor; ?>
     </nav><?php endif; ?>
 </div>

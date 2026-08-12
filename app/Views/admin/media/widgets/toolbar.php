@@ -1,80 +1,11 @@
-<?php
-
-declare(strict_types=1);
-?>
-
-<div class="card shadow-sm border-0 mb-4">
-
-    <div class="card-body">
-
-        <div class="row align-items-center g-3">
-
-            <!-- Left -->
-
-            <div class="col-lg-4">
-
-                <h3 class="mb-1 fw-bold">
-                    Media Library
-                </h3>
-
-                <p class="text-muted mb-0">
-                    Upload, search and manage your media files.
-                </p>
-
-            </div>
-
-            <!-- Center -->
-
-            <div class="col-lg-5">
-
-                <form action="<?= htmlspecialchars(url('/admin/media')) ?>" method="GET">
-
-                    <div class="input-group">
-
-                        <span class="input-group-text bg-white">
-
-                            <i class="bi bi-search"></i>
-
-                        </span>
-
-                        <input
-                            type="text"
-                            class="form-control"
-                            name="search"
-                            placeholder="Search by filename, title..."
-                            value="<?= htmlspecialchars($search ?? '') ?>"
-                        >
-
-                        <button
-                            class="btn btn-outline-secondary"
-                            type="submit">
-
-                            Search
-
-                        </button>
-
-                    </div>
-
-                </form>
-
-            </div>
-
-            <!-- Right -->
-
-            <div class="col-lg-3 text-lg-end">
-
-                <a class="btn btn-primary" href="#uploadMediaForm">
-
-                    <i class="bi bi-cloud-upload me-2"></i>
-
-                    Upload Media
-
-                </a>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
+<section class="media-library-hero">
+    <div class="media-library-hero-copy"><span><i data-lucide="library"></i> Digital asset library</span><h2>Media Manager</h2><p>Store, find and reuse images, documents and campaign assets from one organised workspace.</p></div>
+    <div class="media-library-stat"><strong><?= (int) $total ?></strong><span>asset<?= $total === 1 ? '' : 's' ?> in library</span></div>
+</section>
+<section class="media-library-toolbar">
+    <form action="<?= htmlspecialchars(url('/admin/media')) ?>" method="get" class="media-library-search">
+        <i data-lucide="search"></i><input type="search" name="search" placeholder="Search filename, title or asset…" value="<?= htmlspecialchars($search ?? '') ?>" autocomplete="off" data-media-live-search><button type="submit">Search</button>
+        <?php if (($search ?? '') !== ''): ?><a href="<?= htmlspecialchars(url('/admin/media')) ?>" aria-label="Clear search"><i data-lucide="x"></i></a><?php endif; ?>
+    </form>
+    <a class="media-upload-trigger" href="#uploadMediaForm"><i data-lucide="upload-cloud"></i> Upload assets</a>
+</section>

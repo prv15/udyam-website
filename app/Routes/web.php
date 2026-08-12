@@ -11,6 +11,7 @@ use App\Controllers\Website\ConsultationController;
 use App\Controllers\Website\InvoiceController;
 use App\Controllers\Website\PayyantraWebhookController;
 use App\Controllers\Website\SubscriptionPlansController;
+use App\Controllers\Website\DigitalBusinessCardController;
 
 $router->get('/', [HomeController::class, 'index']);
 $router->get('/home', [HomeController::class, 'index']);
@@ -24,6 +25,9 @@ $router->post('/consultation/request', [ConsultationController::class, 'store'])
 $router->get('/invoice/{token}', [InvoiceController::class, 'show']);
 $router->get('/invoice/{token}/pdf', [InvoiceController::class, 'pdf']);
 $router->post('/payments/payyantra/webhook', [PayyantraWebhookController::class, 'handle']);
+$router->get('/card/{slug}', [DigitalBusinessCardController::class, 'show']);
+$router->get('/card/{slug}/contact.vcf', [DigitalBusinessCardController::class, 'vcard']);
+$router->post('/card/{slug}/event', [DigitalBusinessCardController::class, 'event']);
 
 // Keep this route last so specific website routes always take precedence.
 $router->get('/{slug}', [PageController::class, 'show']);

@@ -19,7 +19,7 @@
     </div>
 
 
-    <div class="topbar-center">
+    <?php if (($user['user_type'] ?? '') === 'admin'): ?><div class="topbar-center">
 
         <div class="search-box global-search" data-search-url="<?= htmlspecialchars(url('/admin/search')) ?>">
 
@@ -40,7 +40,7 @@
 
         </div>
 
-    </div>
+    </div><?php endif; ?>
 
 
     <div class="topbar-right">
@@ -66,6 +66,7 @@
                         ['/admin/media', 'image-plus', 'Media', 'Upload an asset'],
                     ];
                     foreach ($createItems as [$route, $icon, $label, $description]):
+                        if (!$permissionService->canPath($user, $route, 'manage')) continue;
                     ?>
                         <a href="<?= htmlspecialchars(url($route)) ?>">
                             <span><i data-lucide="<?= htmlspecialchars($icon) ?>"></i></span>
@@ -76,12 +77,15 @@
             </div>
         </div>
 
-        <a class="icon-btn notification-button<?= ($unreadContactCount ?? 0) > 0 ? ' has-notifications' : '' ?>" href="<?= htmlspecialchars(url('/admin/contact-messages')) ?>" aria-label="<?= (int) ($unreadContactCount ?? 0) ?> unread contact messages">
+        <?php $notificationTotal = (int) ($adminNotificationCount ?? 0) + (int) ($unreadContactCount ?? 0); ?>
+        <div class="admin-notification-menu" data-notification-url="<?= htmlspecialchars(url('/admin/notification-center/feed')) ?>" data-notification-read-all-url="<?= htmlspecialchars(url('/admin/notification-center/read-all')) ?>" data-notification-read-url="<?= htmlspecialchars(url('/admin/notification-center/__id__/read')) ?>">
+        <button class="icon-btn notification-button<?= $notificationTotal > 0 ? ' has-notifications' : '' ?>" type="button" aria-label="<?= $notificationTotal ?> unread notifications" aria-expanded="false">
 
             <i data-lucide="bell"></i>
-            <?php if (($unreadContactCount ?? 0) > 0): ?><span class="notification-count"><?= min(99, (int) $unreadContactCount) ?></span><?php endif; ?>
+            <span class="notification-count"<?= $notificationTotal > 0 ? '' : ' hidden' ?>><?= min(99, $notificationTotal) ?></span>
 
-        </a>
+        </button>
+        <div class="admin-notification-dropdown" hidden><div class="notification-dropdown-head"><div><strong>Notifications</strong><small>Live operational updates</small></div><button type="button" data-admin-notification-read-all>Mark all read</button></div><div class="admin-notification-list"></div><a class="notification-dropdown-footer" href="<?= htmlspecialchars(url('/admin/notification-center')) ?>">Open Notification Center <i data-lucide="arrow-right"></i></a></div></div>
 
         <button class="icon-btn">
 
@@ -101,7 +105,7 @@
 
                 <strong><?= htmlspecialchars($user['first_name']) ?></strong>
 
-                <small>Administrator</small>
+                <small><?= ($user['user_type'] ?? '') === 'staff' ? 'Staff Portal' : 'Administrator' ?></small>
 
             </div>
 

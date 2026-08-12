@@ -17,8 +17,9 @@ final class Media extends Model
         $params = [];
 
         if ($search !== '') {
-            $where[] = '(original_name LIKE :search OR title LIKE :search OR alt_text LIKE :search)';
-            $params['search'] = '%' . $search . '%';
+            $where[] = '(original_name LIKE :original_name_search OR title LIKE :title_search OR alt_text LIKE :alt_text_search)';
+            $term = '%' . $search . '%';
+            $params = ['original_name_search' => $term, 'title_search' => $term, 'alt_text_search' => $term];
         }
 
         $statement = $this->db->prepare(
@@ -42,8 +43,9 @@ final class Media extends Model
         $params = [];
 
         if ($search !== '') {
-            $sql .= ' AND (original_name LIKE :search OR title LIKE :search OR alt_text LIKE :search)';
-            $params['search'] = '%' . $search . '%';
+            $sql .= ' AND (original_name LIKE :original_name_search OR title LIKE :title_search OR alt_text LIKE :alt_text_search)';
+            $term = '%' . $search . '%';
+            $params = ['original_name_search' => $term, 'title_search' => $term, 'alt_text_search' => $term];
         }
 
         $statement = $this->db->prepare($sql);

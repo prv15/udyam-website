@@ -28,6 +28,7 @@ class DashboardController extends AdminController
                 'distribution' => $this->dashboard->moduleDistribution(),
                 'activities' => $this->dashboard->recentActivity(),
                 'systemStatus' => $this->dashboard->systemStatus(),
+                'erp' => $this->dashboard->erpOverview(),
             ]
         );
     }

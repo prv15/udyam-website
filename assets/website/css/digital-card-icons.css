@@ -1,0 +1,100 @@
+.dc-icon-sprite {
+    display: none;
+}
+
+.dc-actions b {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 9px;
+    overflow: visible;
+    border: 1px solid rgba(20, 47, 126, 0.13);
+    border-radius: 18px;
+    color: #163b9f;
+    background: linear-gradient(145deg, #ffffff, #f0f2fa);
+    box-shadow: 0 8px 20px rgba(22, 42, 102, 0.11), inset 0 1px 0 #ffffff;
+}
+
+.dc-actions > :nth-child(2n) b,
+.dc-actions > :nth-child(3n) b {
+    color: #163b9f;
+    background: linear-gradient(145deg, #ffffff, #f0f2fa);
+    box-shadow: 0 8px 20px rgba(22, 42, 102, 0.11), inset 0 1px 0 #ffffff;
+}
+
+.dc-actions b::after {
+    display: none;
+}
+
+.dc-actions svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    shape-rendering: geometricPrecision;
+    vector-effect: non-scaling-stroke;
+}
+
+.dc-actions a:hover b,
+.dc-actions button:hover b {
+    color: #55227d;
+    border-color: rgba(85, 34, 125, 0.24);
+    background: #ffffff;
+    box-shadow: 0 12px 26px rgba(28, 40, 97, 0.15);
+}
+
+.dc-actions a:active b,
+.dc-actions button:active b {
+    transform: translateY(-1px) scale(0.97);
+}
+
+.dc-actions span {
+    color: #4f5776;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.dc-contact-list i {
+    color: #163b9f;
+    background: linear-gradient(145deg, #f8f9fd, #e9edf8);
+    box-shadow: inset 0 0 0 1px rgba(20, 47, 126, 0.09);
+}
+
+.dc-contact-list i svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    shape-rendering: geometricPrecision;
+    vector-effect: non-scaling-stroke;
+}
+
+@media (max-width: 380px) {
+    .dc-actions b {
+        width: 52px;
+        height: 52px;
+    }
+
+    .dc-actions svg {
+        width: 24px;
+        height: 24px;
+    }
+}
+
+.theme-udyam-midnight .dc-actions b,
+.theme-udyam-midnight .dc-actions > :nth-child(2n) b,
+.theme-udyam-midnight .dc-actions > :nth-child(3n) b {
+    color: #dbe4ff;
+    border-color: rgba(255, 255, 255, 0.13);
+    background: rgba(255, 255, 255, 0.09);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+}
+
+.theme-udyam-midnight .dc-actions span {
+    color: #c0c5dd;
+}

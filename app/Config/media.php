@@ -18,6 +18,11 @@ return [
     */
     'upload_path' => PUBLIC_PATH . '/uploads/media',
 
+    // Existing hosting accounts normally own this directory. Local XAMPP
+    // runs Apache as a separate user, so the deployed directory itself must
+    // grant that user write access (the uploader still creates children 0775).
+    'directory_mode' => 0775,
+
     /*
     |--------------------------------------------------------------------------
     | Maximum Upload Size (Bytes)
