@@ -8,6 +8,8 @@ use App\Core\Controller;
 use App\Services\AuthService;
 use App\Core\Session;
 use App\Middleware\GuestMiddleware;
+use App\Models\Role;
+use App\Services\PermissionService;
 
 class AuthController extends Controller
 {
@@ -28,7 +30,10 @@ class AuthController extends Controller
     public function entry(): never
     {
         $user = Session::get('user');
-        header('Location: ' . url(is_array($user) && isset($user['id']) ? '/admin/dashboard' : '/admin/login'));
+        $destination = is_array($user) && isset($user['id'])
+            ? (new PermissionService(new Role()))->landingPath($user)
+            : '/admin/login';
+        header('Location: ' . url($destination));
         exit;
     }
 
@@ -50,7 +55,7 @@ class AuthController extends Controller
         if (
             !$user
             || ($user['status'] ?? '') !== 'active'
-            || ($user['user_type'] ?? '') !== 'admin'
+            || !in_array(($user['user_type'] ?? ''), ['admin', 'staff'], true)
         ) {
 
             $this->renderLogin('Invalid email or password.');
@@ -69,7 +74,7 @@ class AuthController extends Controller
         unset($user['password']);
         Session::set('user', $user);
 
-        header('Location: ' . url('/admin/dashboard'));
+        header('Location: ' . url((new PermissionService(new Role()))->landingPath($user)));
         exit;
     }
     public function logout(): void

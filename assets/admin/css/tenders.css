@@ -1,0 +1,40 @@
+.admin-shell .tender-module-card {
+    overflow: hidden;
+    border: 1px solid #e3e8f3;
+    border-radius: 18px;
+    box-shadow: 0 14px 36px rgba(23, 40, 78, .07);
+}
+
+.admin-shell .tender-admin-table { min-width: 1120px; }
+.admin-shell .tender-admin-table th { padding: 15px 13px; background: linear-gradient(110deg, #f8faff, #f3f6fd); }
+.admin-shell .tender-admin-table td { padding: 15px 13px; vertical-align: middle; }
+.admin-shell .tender-admin-table tbody tr { border-left: 3px solid transparent; }
+.admin-shell .tender-admin-table tbody tr:hover { border-left-color: #6956d9; background: #f9faff; }
+.admin-shell .tender-admin-table th:nth-child(1) { min-width: 120px; }
+.admin-shell .tender-admin-table th:nth-child(2) { min-width: 170px; }
+.admin-shell .tender-admin-table th:nth-child(3) { min-width: 290px; }
+.admin-shell .tender-admin-table th:nth-child(4) { min-width: 150px; }
+
+.admin-shell .tender-region, .admin-shell .tender-deadline { display: inline-flex; align-items: center; gap: 7px; color: #475467; font-size: .76rem; font-weight: 600; }
+.admin-shell .tender-region svg { width: 14px; color: #7560e3; }
+.admin-shell .tender-deadline svg { width: 14px; color: #b7791f; }
+.admin-shell .tender-inviter { display: block; color: #344054; font-size: .77rem; font-weight: 600; line-height: 1.45; }
+.admin-shell .tender-project { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.admin-shell .tender-project strong { color: #16234a; font-size: .78rem; line-height: 1.45; font-weight: 650; }
+.admin-shell .tender-type { display: inline-flex; padding: 4px 8px; border-radius: 999px; color: #4f46b5; background: #eeedff; font-size: .59rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.admin-shell .tender-type-notice { color: #0c796b; background: #e5f7f3; }
+.admin-shell .tender-type-corrigendum { color: #ae6609; background: #fff5df; }
+.admin-shell .tender-mode { display: inline-flex; padding: 5px 9px; border: 1px solid #e5e9f2; border-radius: 7px; color: #526075; background: #fff; font-size: .69rem; font-weight: 600; }
+.admin-shell .tender-status { color: #226b47; background: #eaf8f0; }
+.admin-shell .tender-actions { display: flex; align-items: center; gap: 7px; }
+.admin-shell .tender-actions form { margin: 0; }
+.admin-shell .tender-action { display: inline-grid; width: 33px; height: 33px; place-items: center; padding: 0; border: 1px solid #e2e7f0; border-radius: 9px; cursor: pointer; background: #fff; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease, color .18s ease, border-color .18s ease; }
+.admin-shell .tender-action svg { width: 15px; height: 15px; }
+.admin-shell .tender-action:hover { transform: translateY(-2px); box-shadow: 0 7px 14px rgba(31, 45, 87, .12); }
+.admin-shell .tender-action-edit { color: #4f46bb; }
+.admin-shell .tender-action-edit:hover { border-color: #bfb8ff; background: #f4f2ff; }
+.admin-shell .tender-action-delete { color: #c33f49; }
+.admin-shell .tender-action-delete:hover { border-color: #ffc5ca; background: #fff1f2; }
+.admin-shell .tender-status-control{display:flex;align-items:center;gap:8px}.admin-shell .tender-status-control select{flex:1}.admin-shell .tender-status-add{display:inline-flex;align-items:center;gap:5px;height:38px;padding:0 10px;border:1px solid #d7d1ff;border-radius:8px;color:#5845cb;background:#f7f5ff;font-size:.7rem;font-weight:700;cursor:pointer}.admin-shell .tender-status-add:hover{border-color:#8c7be7;background:#efecff}.admin-shell .tender-status-add svg{width:14px}.admin-shell .tender-custom-status{margin-top:9px;padding:10px;border:1px dashed #cfc8f1;border-radius:9px;background:#fbfaff}.admin-shell .tender-custom-status label{display:block;margin:0 0 5px;color:#5d4cc5;font-size:.66rem;font-weight:700}.admin-shell .tender-custom-status[hidden]{display:none}
+
+@media (max-width: 760px) { .admin-shell .tender-module-card { border-radius: 13px; } }

@@ -5,9 +5,30 @@ CREATE TABLE IF NOT EXISTS users (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL DEFAULT '',
+    display_name VARCHAR(255) NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
-    user_type ENUM('admin', 'customer') NOT NULL DEFAULT 'customer',
+    user_type ENUM('admin', 'staff', 'customer') NOT NULL DEFAULT 'customer',
+    employee_code VARCHAR(60) NULL UNIQUE,
+    profile_photo_media_id BIGINT UNSIGNED NULL,
+    designation VARCHAR(180) NULL,
+    department VARCHAR(180) NULL,
+    mobile VARCHAR(40) NULL,
+    alternate_mobile VARCHAR(40) NULL,
+    office_extension VARCHAR(30) NULL,
+    date_of_joining DATE NULL,
+    employment_type ENUM('full_time','part_time','contract','intern','consultant') NULL,
+    reporting_manager_id BIGINT UNSIGNED NULL,
+    office_location VARCHAR(255) NULL,
+    address TEXT NULL,
+    employment_status ENUM('active','inactive','on_leave','resigned','suspended') NULL,
+    bio TEXT NULL,
+    skills TEXT NULL,
+    linkedin_url VARCHAR(500) NULL,
+    website_url VARCHAR(500) NULL,
+    whatsapp_number VARCHAR(40) NULL,
+    emergency_contact TEXT NULL,
+    internal_notes TEXT NULL,
     status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -83,6 +104,17 @@ CREATE TABLE IF NOT EXISTS admin_records (
     UNIQUE KEY uq_admin_records_module_slug (module, slug),
     CONSTRAINT fk_admin_records_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_admin_records_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS tender_deadline_events (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tender_record_id BIGINT UNSIGNED NOT NULL,
+    recipient_key VARCHAR(100) NOT NULL,
+    event_key VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_tender_deadline_dispatch (tender_record_id, recipient_key, event_key),
+    INDEX idx_tender_deadline_events_created (created_at),
+    CONSTRAINT fk_tender_deadline_events_tender FOREIGN KEY (tender_record_id) REFERENCES admin_records(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS page_sections (

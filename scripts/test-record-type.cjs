@@ -1,0 +1,17 @@
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const element = () => ({handlers:{}, addEventListener(k,f){this.handlers[k]=f}, focus(){}, setAttribute(k,v){this[k]=v}});
+const add=element(), input=element(), editor=element(), save=element(), cancel=element(), form=element();
+const select={options:[{value:'tender',text:'Tender'}],value:'tender',form,add(o){this.options.push(o)},focus(){}};
+input.value='';input.setCustomValidity=function(v){this.error=v};input.reportValidity=function(){return !this.error};
+editor.hidden=true;editor.querySelector=s=>s.includes('save')?save:cancel;add.parentElement={querySelector:()=>select};
+const document={querySelector:()=>add,getElementById:id=>id==='new-record-type'?editor:input};
+const source=fs.readFileSync('app/Views/admin/modules/custom-record-type.php','utf8').split('<script>')[1].split('</script>')[0];
+vm.runInNewContext(source,{document,Option:function(text,value){this.text=text;this.value=value}});
+add.handlers.click();assert.equal(editor.hidden,false);
+input.value='  Expression of Interest  ';save.handlers.click();assert.equal(select.value,'Expression of Interest');assert.equal(editor.hidden,true);
+add.handlers.click();input.value='TENDER';save.handlers.click();assert.equal(select.value,'tender');assert.equal(select.options.length,2);
+add.handlers.click();input.value='  ';let blocked=false;form.handlers.submit({preventDefault(){blocked=true}});assert(blocked);
+cancel.handlers.click();assert.equal(editor.hidden,true);assert.equal(select.value,'tender');
+add.handlers.click();input.value='New type';form.handlers.submit({preventDefault(){throw Error('Unexpected block')}});assert.equal(select.value,'New type');
+add.handlers.click();input.value='Keyboard type';input.handlers.keydown({key:'Enter',preventDefault(){}});assert.equal(select.value,'Keyboard type');
+console.log('PASS: add, trim, case-insensitive duplicates, blank prevention, cancel, submit and keyboard');

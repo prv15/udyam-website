@@ -18,11 +18,17 @@ final class UsersController extends AdminController
     public function index(): void
     {
         $page = max(1, $this->request->integer('page', 1));
+        $perPage=$this->perPage();
         $search = $this->request->string('search');
         $this->render('users/index', [
-            'title' => 'Users & Roles', 'users' => $this->users->paginate($page, 20, $search),
-            'total' => $this->users->total($search), 'page' => $page, 'search' => $search,
+            'title' => 'Users & Roles', 'users' => $this->users->paginate($page, $perPage, $search),
+            'total' => $this->users->total($search), 'page' => $page, 'perPage'=>$perPage, 'search' => $search,
         ]);
+    }
+
+    private function perPage(): int
+    {
+        $value=$this->request->integer('per_page',10);return in_array($value,[10,50,100],true)?$value:10;
     }
 
     public function create(): void
@@ -117,8 +123,11 @@ final class UsersController extends AdminController
         } elseif ($data['email'] !== '' && $this->users->emailExists($data['email'], $ignoreId)) {
             $errors['email'][] = 'This email is already in use.';
         }
-        if (!in_array($data['user_type'], ['admin', 'customer'], true)) {
+        if (!in_array($data['user_type'], ['admin', 'staff', 'customer'], true)) {
             $errors['user_type'][] = 'Select a valid role.';
+        }
+        if ($passwordRequired && $data['user_type'] === 'staff') {
+            $errors['user_type'][] = 'Create staff from Staff Management so employee details and the business card are generated together.';
         }
         if (!in_array($data['status'], ['active', 'inactive'], true)) {
             $errors['status'][] = 'Select a valid status.';

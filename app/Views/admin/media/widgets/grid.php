@@ -1,117 +1,17 @@
 <?php
-
 declare(strict_types=1);
-
 use App\Helpers\FileHelper;
-
 ?>
-
-<div class="row g-4">
-
-    <?php foreach ($media as $item): ?>
-
-        <?php
-
-        $isImage = FileHelper::isImage($item['mime_type']);
-
-        $extension = FileHelper::extension($item['filename']);
-
-        ?>
-
-        <div class="col-12 col-sm-6 col-md-4 col-lg-3 col-xl-2">
-
-            <div class="card media-card h-100 border-0 shadow-sm">
-
-                <div class="media-thumbnail">
-
-                    <?php if ($isImage): ?>
-
-                        <img
-                            src="<?= htmlspecialchars(media_url($item)) ?>"
-                            alt="<?= htmlspecialchars($item['alt_text'] ?: $item['filename']) ?>"
-                            loading="lazy">
-
-                    <?php else: ?>
-
-                        <div class="media-file-icon">
-
-                            <i class="bi <?= FileHelper::icon($extension) ?>"></i>
-
-                        </div>
-
-                    <?php endif; ?>
-
-                </div>
-
-                <div class="card-body">
-
-                    <h6
-                        class="media-title"
-                        title="<?= htmlspecialchars($item['filename']) ?>">
-
-                        <?= htmlspecialchars($item['title'] ?: $item['filename']) ?>
-
-                    </h6>
-
-                    <div class="small text-muted">
-
-                        <?= strtoupper($extension) ?>
-
-                    </div>
-
-                    <div class="small text-muted">
-
-                        <?= FileHelper::formatBytes((int) $item['file_size']) ?>
-
-                    </div>
-
-                    <?php if ($isImage && !empty($item['width'])): ?>
-
-                        <div class="small text-muted">
-
-                            <?= $item['width'] ?> × <?= $item['height'] ?>
-
-                        </div>
-
-                    <?php endif; ?>
-
-                    <div class="small text-muted">
-
-                        <?= date('d M Y', strtotime($item['created_at'])) ?>
-
-                    </div>
-
-                </div>
-
-                <div class="card-footer bg-white border-0">
-
-                    <div class="d-flex justify-content-between">
-
-                        <form
-                            action="<?= htmlspecialchars(url('/admin/media/delete/' . $item['id'])) ?>"
-                            method="POST"
-                            class="delete-media-form">
-
-                            <?= csrf_field() ?>
-
-                            <button
-                                type="submit"
-                                class="btn btn-outline-danger btn-sm">
-
-                                <i class="bi bi-trash"></i>
-
-                            </button>
-
-                        </form>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    <?php endforeach; ?>
-
+<div class="media-asset-grid">
+<?php foreach ($media as $item): $isImage=FileHelper::isImage($item['mime_type']);$extension=FileHelper::extension($item['filename']);$name=(string)($item['title']?:$item['filename']); ?>
+    <article class="media-asset-card" data-media-asset data-media-searchable="<?= htmlspecialchars(strtolower($name.' '.$item['filename'].' '.$extension),ENT_QUOTES) ?>">
+        <a class="media-asset-preview" href="<?= htmlspecialchars(media_url($item)) ?>" target="_blank" rel="noopener" title="Open <?= htmlspecialchars($name) ?>">
+            <?php if($isImage): ?><img src="<?= htmlspecialchars(media_url($item)) ?>" alt="<?= htmlspecialchars($item['alt_text']?:$item['filename']) ?>" loading="lazy"><?php else: ?><span class="media-asset-file"><i data-lucide="file-text"></i><b><?= htmlspecialchars(strtoupper($extension ?: 'FILE')) ?></b></span><?php endif; ?>
+            <span class="media-asset-open"><i data-lucide="external-link"></i></span>
+        </a>
+        <div class="media-asset-content"><span class="media-asset-kind"><?= htmlspecialchars(strtoupper($extension ?: 'FILE')) ?></span><h3 title="<?= htmlspecialchars($name) ?>"><?= htmlspecialchars($name) ?></h3><p><?= FileHelper::formatBytes((int)$item['file_size']) ?><?php if($isImage&&!empty($item['width'])): ?> · <?= (int)$item['width'] ?> × <?= (int)$item['height'] ?><?php endif; ?></p><small><i data-lucide="calendar"></i> <?= htmlspecialchars(date('d M Y',strtotime($item['created_at']))) ?></small></div>
+        <div class="media-asset-actions"><a href="<?= htmlspecialchars(media_url($item)) ?>" target="_blank" rel="noopener"><i data-lucide="eye"></i> Preview</a><form action="<?= htmlspecialchars(url('/admin/media/delete/'.$item['id'])) ?>" method="post" class="delete-media-form"><?= csrf_field() ?><button type="submit" aria-label="Delete <?= htmlspecialchars($name) ?>"><i data-lucide="trash-2"></i></button></form></div>
+    </article>
+<?php endforeach; ?>
 </div>
+<p class="media-live-empty" data-media-live-empty hidden><i data-lucide="search-x"></i> No uploaded assets match this search on this page.</p>

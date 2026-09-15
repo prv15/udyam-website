@@ -26,16 +26,25 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("resize", () => {
         if (!mobileSidebar()) closeSidebar();
     });
+    const sidebarScroller = document.querySelector('.sidebar-menu');
+    const sidebarScrollKey = 'udyam.admin.sidebar.scroll';
+    if (sidebarScroller) {
+        const savedScroll = Number(sessionStorage.getItem(sidebarScrollKey) || 0);
+        if (savedScroll) sidebarScroller.scrollTop = savedScroll;
+        sidebarScroller.addEventListener('scroll', () => sessionStorage.setItem(sidebarScrollKey, String(sidebarScroller.scrollTop)), {passive: true});
+        document.querySelectorAll('.sidebar a.menu-item,.sidebar-submenu a').forEach((item) => item.addEventListener('click', () => sessionStorage.setItem(sidebarScrollKey, String(sidebarScroller.scrollTop))));
+    }
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") closeSidebar();
     });
 
     initialiseCreateMenu();
     initialiseGlobalSearch();
+    initialiseAdminNotifications();
 
     if (typeof Chart !== "undefined" && document.querySelector(".advanced-dashboard")) {
         const script = document.createElement("script");
-        script.src = new URL("dashboard.js", document.currentScript?.src || window.location.href).href;
+        script.src = window.udyamAdminAssets?.dashboard || "/assets/admin/js/dashboard.js";
         document.body.appendChild(script);
     }
 });
@@ -62,6 +71,48 @@ function initialiseCreateMenu() {
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") setOpen(false);
     });
+}
+
+function initialiseAdminNotifications() {
+    const wrapper = document.querySelector('.admin-notification-menu');
+    const trigger = wrapper?.querySelector('.notification-button');
+    const panel = wrapper?.querySelector('.admin-notification-dropdown');
+    const list = wrapper?.querySelector('.admin-notification-list');
+    const count = wrapper?.querySelector('.notification-count');
+    if (!wrapper || !trigger || !panel || !list) return;
+
+    const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const request = async (url) => fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}}).then((response) => response.ok ? response.json() : Promise.reject());
+    const setCount = (value) => {
+        const amount = Number(value || 0);
+        count.hidden = amount < 1;
+        count.textContent = Math.min(99, amount);
+        trigger.classList.toggle('has-notifications', amount > 0);
+        trigger.setAttribute('aria-label', `${amount} unread notifications`);
+    };
+    const escape = (value) => String(value || '').replace(/[&<>"]/g, (character) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[character]));
+    const timeAgo = (value) => {
+        const seconds = Math.max(0, Math.floor((Date.now() - new Date(String(value).replace(' ', 'T')).getTime()) / 1000));
+        if (seconds < 60) return 'Just now'; if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)} hr ago`; if (seconds < 172800) return 'Yesterday';
+        return `${Math.floor(seconds / 86400)} days ago`;
+    };
+    const render = (items) => {
+        if (!items.length) { list.innerHTML = '<div class="admin-notification-empty">You are all caught up.</div>'; return; }
+        list.innerHTML = items.map((item) => `<a class="admin-notification-item ${item.read_at ? '' : 'unread'}" href="${escape(item.action_url || '/admin/notification-center')}" data-notification-id="${Number(item.id)}"><span><i data-lucide="bell-ring"></i></span><div><strong>${escape(item.title)}</strong><small>${escape(item.message)}</small><em>${timeAgo(item.created_at)}</em></div></a>`).join('');
+        if (window.lucide) lucide.createIcons({nodes: [list]});
+    };
+    const load = async () => { try { const payload = await request(wrapper.dataset.notificationUrl); setCount(payload.count); render(payload.notifications || []); } catch (_) {} };
+    const post = async (url) => fetch(url, {method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'}, body: `_token=${encodeURIComponent(token)}`}).then((response) => response.ok ? response.json() : Promise.reject());
+    trigger.addEventListener('click', async (event) => { event.stopPropagation(); panel.hidden = !panel.hidden; trigger.setAttribute('aria-expanded', String(!panel.hidden)); if (!panel.hidden) await load(); });
+    const readUrl = (id) => (wrapper.dataset.notificationReadUrl || '').replace('__id__', id);
+    list.addEventListener('click', (event) => { const item = event.target.closest('[data-notification-id]'); if (!item) return; post(readUrl(item.dataset.notificationId)).then((payload) => setCount(payload.count)).catch(() => {}); });
+    wrapper.querySelector('[data-admin-notification-read-all]')?.addEventListener('click', () => post(wrapper.dataset.notificationReadAllUrl).then((payload) => { setCount(payload.count); load(); }).catch(() => {}));
+    const notificationCenter = document.querySelector('[data-notification-center]');
+    document.querySelectorAll('[data-notification-read-all]').forEach((button) => button.addEventListener('click', () => post(notificationCenter?.dataset.readAllUrl || wrapper.dataset.notificationReadAllUrl).then(() => window.location.reload()).catch(() => {})));
+    document.querySelectorAll('[data-notification-delete]').forEach((button) => button.addEventListener('click', () => { const row = button.closest('[data-notification-id]'); if (!row) return; post(readUrl(row.dataset.notificationId).replace('/read', '/delete')).then(() => row.remove()).catch(() => {}); }));
+    document.addEventListener('click', (event) => { if (!wrapper.contains(event.target)) { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); } });
+    setInterval(load, 45000);
 }
 
 function initialiseGlobalSearch() {

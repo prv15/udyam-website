@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Middleware;
 
 use App\Core\Session;
+use App\Models\Role;
+use App\Services\PermissionService;
 
 class GuestMiddleware
 {
@@ -14,9 +16,9 @@ class GuestMiddleware
 
             $user = Session::get('user');
 
-            if ($user['user_type'] === 'admin') {
+            if (in_array($user['user_type'] ?? '', ['admin', 'staff'], true)) {
 
-                header('Location: ' . url('/admin/dashboard'));
+                header('Location: ' . url((new PermissionService(new Role()))->landingPath($user)));
 
             } else {
 

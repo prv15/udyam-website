@@ -11,7 +11,7 @@
         </div>
     </section>
 
-    <?php require __DIR__ . '/widgets/stats.php'; ?>
+    <?php require __DIR__ . '/widgets/erp-kpis.php'; ?>
 
     <div class="dashboard-split dashboard-split-main">
         <?php require __DIR__ . '/widgets/analytics.php'; ?>

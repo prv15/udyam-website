@@ -27,12 +27,18 @@ final class ModulesController extends AdminController
             $this->shared['unreadContactCount'] = 0;
         }
         $page = max(1, $this->request->integer('page', 1));
+        $perPage = $this->perPage();
         $search = $this->request->string('search');
+        $tenderFilters=['search'=>$search,'region'=>$this->request->string('region'),'invited_by'=>$this->request->string('invited_by'),'sort'=>in_array($this->request->string('sort','latest'),['latest','deadline','expired','ongoing'],true)?$this->request->string('sort','latest'):'latest'];
+        $partnerFilters=['search'=>$search,'state'=>$this->request->string('state'),'turnover'=>$this->request->string('turnover')];
+        $total=$module==='tenders'?$this->records->tendersTotal($tenderFilters):($module==='customers'?$this->records->partnersTotal($partnerFilters):$this->records->total($module,$search));
+        $pages=max(1,(int)ceil($total/$perPage));$page=min($page,$pages);
         $this->render('modules/index', [
             'title' => $definition['title'], 'module' => $module, 'definition' => $definition,
-            'records' => $this->records->paginate($module, $page, 20, $search),
-            'total' => $this->records->total($module, $search), 'page' => $page,
-            'perPage' => 20, 'search' => $search,
+            'records' => $module==='tenders'?$this->records->paginateTenders($page,$perPage,$tenderFilters):($module==='customers'?$this->records->paginatePartners($page,$perPage,$partnerFilters):$this->records->paginate($module,$page,$perPage,$search)),
+            'total' => $total, 'page' => $page, 'perPage' => $perPage, 'search' => $search,
+            'tenderFilters'=>$tenderFilters,'tenderFilterOptions'=>$module==='tenders'?$this->records->tenderFilterOptions():[],
+            'partnerFilters'=>$partnerFilters,'partnerFilterOptions'=>$module==='customers'?$this->records->partnerFilterOptions():[],
         ]);
     }
 
@@ -46,11 +52,94 @@ final class ModulesController extends AdminController
         ]);
     }
 
+    public function importForm(): void
+    {
+        $module = 'tenders';
+        $definition = $this->definition($module);
+        $this->render('modules/tender-import', [
+            'title' => 'Bulk Import Tenders & Notices', 'module' => $module, 'definition' => $definition,
+        ]);
+    }
+
+    public function import(): void
+    {
+        $module = 'tenders';
+        $this->definition($module);
+        $this->csrf();
+        $upload = $this->request->file('import_file');
+        if (!is_array($upload) || ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string) ($upload['tmp_name'] ?? ''))) {
+            Session::set('import_errors', ['Choose a valid CSV file to import.']);
+            $this->redirect('/admin/tenders/import');
+        }
+        if (($upload['size'] ?? 0) > 5 * 1024 * 1024 || strtolower(pathinfo((string) ($upload['name'] ?? ''), PATHINFO_EXTENSION)) !== 'csv') {
+            Session::set('import_errors', ['Only CSV files up to 5 MB can be imported.']);
+            $this->redirect('/admin/tenders/import');
+        }
+        $handle = fopen((string) $upload['tmp_name'], 'rb');
+        $header = $handle ? fgetcsv($handle, 0, ',', '"', '\\') : false;
+        $normalize = static fn (string $value): string => strtolower(trim(preg_replace('/[^a-z0-9]+/i', '_', $value), '_'));
+        $headers = is_array($header) ? array_map(static fn ($value): string => $normalize((string) $value), $header) : [];
+        $required = ['state_region', 'invited_by', 'tender_project_details', 'last_date', 'time', 'submission_mode'];
+        if ($handle === false || array_diff($required, $headers) !== []) {
+            if ($handle !== false) fclose($handle);
+            Session::set('import_errors', ['The CSV header must include: State / Region, Invited By, Tender / Project Details, Last Date, Time, Submission Mode.']);
+            $this->redirect('/admin/tenders/import');
+        }
+        $index = array_flip($headers);
+        $value = static fn (array $row, string $key): string => isset($index[$key]) ? trim((string) ($row[$index[$key]] ?? '')) : '';
+        $created = 0;
+        $skipped = [];
+        $rowNumber = 1;
+        while (($row = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
+            $rowNumber++;
+            if ($row === [null] || $row === []) continue;
+            $title = $value($row, 'tender_project_details');
+            if ($title === '') {
+                $skipped[] = 'Row ' . $rowNumber . ': Tender / Project Details is required.';
+                continue;
+            }
+            $deadline = $value($row, 'last_date');
+            $date = $this->importDate($deadline);
+            $type = strtolower($value($row, 'record_type'));
+            if (!in_array($type, ['tender', 'notice', 'corrigendum'], true)) $type = 'tender';
+            $data = [
+                'type' => $type, 'region' => $value($row, 'state_region'), 'invited_by' => $value($row, 'invited_by'),
+                'department' => $value($row, 'invited_by'), 'title' => $title, 'deadline_label' => $deadline,
+                'closing_date' => $date, 'submission_time' => $value($row, 'time'),
+                'submission_mode' => $value($row, 'submission_mode'), 'document_url' => $value($row, 'document_url'),
+                'description' => $value($row, 'additional_notes'),
+            ];
+            $this->records->create([
+                'module' => 'tenders', 'title' => $title, 'slug' => null, 'status' => 'published',
+                'sort_order' => 0, 'data' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'created_by' => (int) (Session::get('user')['id'] ?? 0), 'updated_by' => (int) (Session::get('user')['id'] ?? 0),
+            ]);
+            $created++;
+        }
+        fclose($handle);
+        Session::set('success', $created . ' tender/notice record' . ($created === 1 ? '' : 's') . ' imported successfully.');
+        if ($skipped !== []) Session::set('import_errors', array_slice($skipped, 0, 10));
+        $this->redirect('/admin/tenders');
+    }
+
+    public function importTemplate(): void
+    {
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="udyam-tenders-notices-import-template.csv"');
+        $output = fopen('php://output', 'wb');
+        fputcsv($output, ['Record Type', 'State / Region', 'Invited By', 'Tender / Project Details', 'Last Date', 'Time', 'Submission Mode', 'Document URL', 'Additional Notes']);
+        fputcsv($output, ['Tender', 'PAN INDIA', 'Example Ministry / Organisation', 'Brief tender or project details', '31 August 2026', '05:00 PM', 'Online', 'https://example.gov.in/tender', 'Optional internal note']);
+        fputcsv($output, ['Notice', 'Odisha', 'Example Directorate', 'Open empanelment / notice details', 'Open Throughout Year', '–', 'Online', '', '']);
+        fclose($output);
+        exit;
+    }
+
     public function store(string $module): void
     {
         $definition = $this->definition($module);
         $this->csrf();
         [$data, $errors] = $this->validatedData($definition);
+        if ($module === 'tenders') $data = $this->normalizeTenderData($data);
         if ($errors !== []) {
             Session::set('errors', $errors);
             Session::set('old', $data);
@@ -91,6 +180,7 @@ final class ModulesController extends AdminController
             $this->abort404();
         }
         [$data, $errors] = $this->validatedData($definition);
+        if ($module === 'tenders') $data = $this->normalizeTenderData($data);
         if ($errors !== []) {
             Session::set('errors', $errors);
             Session::set('old', $data);
@@ -111,10 +201,27 @@ final class ModulesController extends AdminController
     {
         $this->definition($module);
         $this->csrf();
-        if ($this->records->findForModule($module, $id) !== null) {
+        if($module==='customers'){
+            $this->customerPortal->deleteCustomerRecords([$id]);
+        }elseif ($this->records->findForModule($module, $id) !== null) {
             $this->records->delete($id);
         }
         $this->redirectSuccess('/admin/' . $module, 'Record deleted successfully.');
+    }
+
+    public function bulkDelete(string $module): void
+    {
+        $definition = $this->definition($module);
+        $this->csrf();
+        $ids = $this->request->input('record_ids', []);
+        $selected=is_array($ids)?$ids:[];
+        $deleted=$module==='customers'
+            ?$this->customerPortal->deleteCustomerRecords($selected)
+            :$this->records->deleteManyForModule($module,$selected);
+        if ($deleted === 0) {
+            $this->redirectSuccess('/admin/' . $module, 'No records were selected.');
+        }
+        $this->redirectSuccess('/admin/' . $module, $deleted . ' ' . strtolower($definition['singular']) . ($deleted === 1 ? ' was' : 's were') . ' deleted.');
     }
 
     private function definition(string $module): array
@@ -122,7 +229,13 @@ final class ModulesController extends AdminController
         if (!isset($this->modules[$module])) {
             $this->abort404();
         }
-        return $this->modules[$module];
+        $definition = $this->modules[$module];
+        if ($module === 'tenders') {
+            foreach ($this->records->tenderTypes() as $type) {
+                $definition['fields']['type']['options'][$type] ??= $type;
+            }
+        }
+        return $definition;
     }
 
     private function validatedData(array $definition): array
@@ -141,7 +254,7 @@ final class ModulesController extends AdminController
             if (isset($field['maxlength']) && mb_strlen($value) > $field['maxlength']) {
                 $errors[$name][] = $field['label'] . ' is too long.';
             }
-            if (isset($field['options']) && $value !== '' && !array_key_exists($value, $field['options'])) {
+            if (isset($field['options']) && !($field['allow_custom'] ?? false) && $value !== '' && !array_key_exists($value, $field['options'])) {
                 $errors[$name][] = $field['label'] . ' contains an invalid value.';
             }
         }
@@ -160,6 +273,10 @@ final class ModulesController extends AdminController
     {
         $options = $this->statusOptions($module);
         $status = $this->request->string('status', (string) array_key_first($options));
+        if ($module === 'tenders' && $status === 'custom') {
+            $custom = strtolower(trim((string) preg_replace('/[^a-z0-9]+/i', '-', $this->request->string('custom_status')), '-'));
+            return $custom !== '' ? substr($custom, 0, 60) : 'active';
+        }
         return array_key_exists($status, $options) ? $status : (string) array_key_first($options);
     }
 
@@ -185,10 +302,36 @@ final class ModulesController extends AdminController
             'newsletter' => [
                 'active' => 'Subscribed', 'unsubscribed' => 'Unsubscribed', 'bounced' => 'Bounced',
             ],
-            'services', 'focus-areas', 'blog', 'tenders', 'testimonials', 'faqs', 'team', 'partners', 'menu', 'seo' => [
+            'tenders' => ['active' => 'Active', 'expired' => 'Expired', 'cancelled' => 'Cancelled'],
+            'services', 'focus-areas', 'blog', 'testimonials', 'faqs', 'team', 'partners', 'menu', 'seo' => [
                 'draft' => 'Draft', 'published' => 'Published', 'inactive' => 'Inactive',
             ],
             default => ['active' => 'Active', 'inactive' => 'Inactive'],
         };
+    }
+
+    private function perPage(): int
+    {
+        $value=$this->request->integer('per_page',10);
+        return in_array($value,[10,50,100],true)?$value:10;
+    }
+
+    private function importDate(string $value): string
+    {
+        if ($value === '' || stripos($value, 'open throughout') !== false) return '';
+        $timestamp = strtotime($value);
+        return $timestamp === false ? '' : date('Y-m-d', $timestamp);
+    }
+
+    private function normalizeTenderData(array $data): array
+    {
+        $data['department'] = $data['invited_by'] ?? '';
+        if (($data['closing_date'] ?? '') === '' && ($data['deadline_label'] ?? '') !== '') {
+            $data['closing_date'] = $data['deadline_label'];
+        }
+        if (($data['deadline_label'] ?? '') === '' && ($data['closing_date'] ?? '') !== '') {
+            $data['deadline_label'] = $data['closing_date'];
+        }
+        return $data;
     }
 }

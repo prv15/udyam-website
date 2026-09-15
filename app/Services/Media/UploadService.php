@@ -26,9 +26,7 @@ final class UploadService
             . DIRECTORY_SEPARATOR . $config['folders']['original']
             . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $folder);
 
-        if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
-            throw new UploadException('Unable to prepare the upload directory.');
-        }
+        $this->prepareDirectory($directory, (int) ($config['directory_mode'] ?? 0775));
 
         $path = $directory . DIRECTORY_SEPARATOR . $filename;
         if (!move_uploaded_file($file['tmp_name'], $path)) {
@@ -56,5 +54,27 @@ final class UploadService
         }
 
         return $result;
+    }
+
+    private function prepareDirectory(string $directory, int $mode): void
+    {
+        if (!is_dir($directory)) {
+            $previousUmask = umask(0002);
+            try {
+                $created = @mkdir($directory, $mode, true);
+            } finally {
+                umask($previousUmask);
+            }
+
+            if (!$created && !is_dir($directory)) {
+                error_log('Media upload directory creation failed: ' . $directory);
+                throw new UploadException('The Media Library folder is not writable. Please check the uploads/media directory permissions.');
+            }
+        }
+
+        if (!is_writable($directory)) {
+            error_log('Media upload directory is not writable: ' . $directory);
+            throw new UploadException('The Media Library folder is not writable. Please check the uploads/media directory permissions.');
+        }
     }
 }

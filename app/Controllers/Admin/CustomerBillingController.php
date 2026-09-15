@@ -7,15 +7,16 @@ namespace App\Controllers\Admin;
 use App\Core\Request;
 use App\Core\Session;
 use App\Repositories\CustomerPortalRepository;
+use App\Services\NotificationService;
 
 final class CustomerBillingController extends AdminController
 {
-    public function __construct(private readonly CustomerPortalRepository $portal,private readonly Request $request){parent::__construct();}
+    public function __construct(private readonly CustomerPortalRepository $portal,private readonly Request $request, private readonly NotificationService $notifications){parent::__construct();}
 
     public function workspace(int $id):void
     {
         $workspace=$this->portal->adminWorkspace($id);if(!$workspace)$this->abort404();
-        $this->render('customers/workspace',['title'=>'Customer Overview','workspace'=>$workspace,'tab'=>$this->request->string('tab','overview')]);
+        $this->render('customers/workspace',['title'=>'Partner Workspace','workspace'=>$workspace,'tab'=>$this->request->string('tab','overview')]);
     }
 
     public function plans():void{$this->render('customers/plans',['title'=>'Subscription Plans','plans'=>$this->portal->adminPlans()]);}
@@ -44,6 +45,20 @@ final class CustomerBillingController extends AdminController
         $this->csrf();$this->portal->archivePlan($id,(int)$this->shared['user']['id']);
         $this->redirectSuccess('/admin/subscription-plans','Subscription plan archived.');
     }
+    public function subscriptionRequests(): void
+    {
+        $status=$this->request->string('status','pending');
+        $this->render('customers/subscription-requests',['title'=>'Subscription Requests','requests'=>$this->portal->adminSubscriptionRequests($status),'status'=>$status]);
+    }
+    public function reviewSubscriptionRequest(int $id): never
+    {
+        $this->csrf();
+        $approve=$this->request->string('decision')==='approve';
+        $result=$this->portal->reviewSubscriptionRequest($id,$approve,$this->request->string('admin_note'),(int)$this->shared['user']['id']);
+        if(!$result)$this->redirectError('/admin/subscription-requests','This subscription request has already been reviewed.');
+        $this->notifications->notifyAdmin('subscription','Subscription request reviewed','A subscription '.$result['request_type'].' request was '.($approve?'approved':'rejected').'.','/admin/subscription-requests',(int)$result['customer_id'],'subscription_request',$id);
+        $this->redirectSuccess('/admin/subscription-requests','Subscription request '.($approve?'approved':'rejected').' and the partner has been notified.');
+    }
     public function invoice(int $id):never
     {
         $this->csrf();$workspace=$this->portal->adminWorkspace($id);if(!$workspace)$this->abort404();$customerId=(int)($workspace['customer']['id']??0);
@@ -51,6 +66,7 @@ final class CustomerBillingController extends AdminController
         try{
             $invoiceId=$this->portal->generateInvoice($customerId,[
                 'invoice_type'=>$this->request->string('invoice_type','service'),'subscription_id'=>$this->request->integer('subscription_id'),
+                'plan_id'=>$this->request->integer('plan_id'),
                 'service_request_id'=>$this->request->integer('service_request_id'),'billing_cycle'=>$this->request->string('billing_cycle'),
                 'description'=>$this->request->string('description'),'amount'=>$this->request->float('amount'),'gst_rate'=>$this->request->float('gst_rate',18),
                 'due_date'=>$this->request->string('due_date'),'notes'=>$this->request->string('notes')
@@ -81,6 +97,23 @@ final class CustomerBillingController extends AdminController
         }
         $this->redirectSuccess('/admin/customers/workspace/'.$id.'?tab=payments','Payment recorded.');
     }
+    public function activateInvoiceSubscription(int $id): never
+    {
+        $this->csrf();$workspace=$this->portal->adminWorkspace($id);if(!$workspace)$this->abort404();$customerId=(int)($workspace['customer']['id']??0);
+        if(!$customerId)$this->redirectError('/admin/customers/workspace/'.$id,'This customer has no linked portal account.');
+        try{$this->portal->activatePaidInvoiceSubscription($customerId,$this->request->integer('invoice_id'),$this->request->integer('plan_id'),(int)$this->shared['user']['id']);}
+        catch(\InvalidArgumentException $e){$this->redirectError('/admin/customers/workspace/'.$id.'?tab=billing',$e->getMessage());}
+        catch(\Throwable $e){error_log('Manual subscription activation failed: '.$e->getMessage());$this->redirectError('/admin/customers/workspace/'.$id.'?tab=billing','Membership could not be activated. Please try again.');}
+        $this->redirectSuccess('/admin/customers/workspace/'.$id.'?tab=subscriptions','Membership activated for this paid invoice.');
+    }
+    public function viewDocument(int $id,int $documentId): never
+    {
+        $this->serveDocument($id,$documentId,false);
+    }
+    public function downloadDocument(int $id,int $documentId): never
+    {
+        $this->serveDocument($id,$documentId,true);
+    }
     private function planData():array
     {
         $name=$this->request->string('name');
@@ -102,4 +135,17 @@ final class CustomerBillingController extends AdminController
         ];
     }
     private function csrf():void{if(!csrf_validate()){http_response_code(419);exit('Session expired.');}}
+    private function serveDocument(int $recordId,int $documentId,bool $download): never
+    {
+        $customer=$this->portal->customerForAdminRecord($recordId);$customerId=(int)($customer['id']??0);
+        $document=$customerId?$this->portal->documentForCustomer($customerId,$documentId):null;if(!$document)$this->abort404();
+        $base=realpath(PUBLIC_PATH);$path=(string)($document['file_path']??'');$absolute=$path!==''?realpath(PUBLIC_PATH.'/'.ltrim($path,'/')):false;
+        if(!$base||!$absolute||!str_starts_with($absolute,$base.DIRECTORY_SEPARATOR)||!is_file($absolute))$this->abort404();
+        $name=str_replace(["\r","\n",'"'],'',basename((string)($document['original_name']??$document['stored_name']??'document')));
+        $mime=(string)($document['mime_type']??'application/octet-stream');
+        header('Content-Type: '.$mime);header('Content-Length: '.(string)filesize($absolute));header('X-Content-Type-Options: nosniff');header('Cache-Control: private, no-store, max-age=0');
+        header('Content-Disposition: '.($download?'attachment':'inline').'; filename="'.$name.'"');
+        $this->portal->log($customerId,$download?'admin_document_downloaded':'admin_document_viewed',($download?'Admin downloaded ':'Admin viewed ').'a partner document.','document',$documentId);
+        readfile($absolute);exit;
+    }
 }

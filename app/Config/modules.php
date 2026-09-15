@@ -34,10 +34,16 @@ return [
         'published_at' => $date('Publish Date'),
     ]],
     'tenders' => ['title' => 'Tenders & Notices', 'singular' => 'Tender / Notice', 'fields' => [
-        'title' => $text('Title'), 'type' => $select('Type', [
+        'type' => $select('Record Type', [
             'tender' => 'Tender', 'notice' => 'Notice', 'corrigendum' => 'Corrigendum',
-        ]), 'department' => $text('Department'), 'closing_date' => $date('Closing Date'),
-        'document_url' => $text('Document URL', false), 'description' => $area('Description'),
+        ]) + ['allow_custom' => true, 'maxlength' => 60], 'region' => $text('State / Region'), 'invited_by' => $text('Invited By'),
+        'title' => $area('Tender / Project Details', true), 'deadline_label' => $date('Last Date / Deadline'),
+        'closing_date' => $date('Closing Date (for alerts and sorting)', false),
+        'submission_time' => $text('Time', false), 'submission_mode' => $select('Submission Mode', [
+            'Hard Copy' => 'Hard Copy', 'Online' => 'Online', 'Google Form' => 'Google Form',
+            'E-Mail' => 'E-Mail', 'E-Proc/E-Tender' => 'E-Proc/E-Tender', 'Hard Copy and E-Mail' => 'Hard Copy and E-Mail',
+        ]),
+        'document_url' => $text('Document URL', false), 'description' => $area('Additional Notes', false),
     ]],
     'testimonials' => ['title' => 'Testimonials', 'singular' => 'Testimonial', 'fields' => [
         'title' => $text('Person Name'), 'designation' => $text('Designation', false),
@@ -64,10 +70,15 @@ return [
             '_self' => 'Same Window', '_blank' => 'New Window',
         ]),
     ]],
-    'customers' => ['title' => 'Customers', 'singular' => 'Customer', 'fields' => [
+    'customers' => ['title' => 'Partners', 'singular' => 'Partner', 'fields' => [
         'title' => $text('Full Name'), 'email' => $email('Email'),
         'phone' => $text('Phone', false), 'company' => $text('Company', false),
-        'address' => $area('Address'), 'joined_at' => $date('Joined Date'),
+        'state' => $text('State', false), 'annual_turnover_range' => $select('Annual Turnover', [
+            'under_25_lakh' => 'Under ₹25 lakh', '25_lakh_1_crore' => '₹25 lakh – ₹1 crore',
+            '1_5_crore' => '₹1 – ₹5 crore', '5_25_crore' => '₹5 – ₹25 crore',
+            '25_100_crore' => '₹25 – ₹100 crore', 'above_100_crore' => 'Above ₹100 crore',
+            'not_disclosed' => 'Not disclosed',
+        ]), 'address' => $area('Address'), 'joined_at' => $date('Joined Date'),
     ]],
     'applications' => ['title' => 'Applications', 'singular' => 'Application', 'fields' => [
         'title' => $text('Application Title'), 'customer_email' => $email('Customer Email'),

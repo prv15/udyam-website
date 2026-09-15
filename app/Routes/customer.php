@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Controllers\Customer\AuthController;
 use App\Controllers\Customer\PaymentController;
 use App\Controllers\Customer\PortalController;
+use App\Controllers\Website\PaymentReturnController;
 
 $router->get('/customer', [AuthController::class,'entry']);
 $router->get('/customer/login', [AuthController::class,'login']);
@@ -20,15 +21,19 @@ $router->post('/customer/reset-password', [AuthController::class,'updatePassword
 $router->post('/customer/logout', [AuthController::class,'logout']);
 
 $router->get('/customer/dashboard', [PortalController::class,'dashboard']);
+$router->get('/customer/tenders', [PortalController::class,'tenders']);
+$router->get('/customer/tenders/{id}', [PortalController::class,'tender']);
 $router->get('/customer/search', [PortalController::class,'search']);
 $router->get('/customer/profile', [PortalController::class,'profile']);
 $router->post('/customer/profile', [PortalController::class,'updateProfile']);
 $router->get('/customer/plans', [PortalController::class,'plans']);
+$router->get('/customer/subscription', [PortalController::class,'subscription']);
+$router->post('/customer/subscription/request', [PortalController::class,'requestSubscriptionAction']);
 $router->post('/customer/plans/{id}/subscribe', [PortalController::class,'subscribe']);
 $router->get('/customer/payments/demo/{token}', [PaymentController::class,'demo']);
 $router->post('/customer/payments/demo/{token}/complete', [PaymentController::class,'demoComplete']);
 $router->post('/customer/payments/demo/{token}/fail', [PaymentController::class,'demoFail']);
-$router->get('/customer/payments/return', [PaymentController::class,'paymentReturn']);
+$router->get('/customer/payments/return', [PaymentReturnController::class,'handle']);
 $router->get('/customer/services', [PortalController::class,'services']);
 $router->get('/customer/services/{id}/apply', [PortalController::class,'apply']);
 $router->post('/customer/services/{id}/apply', [PortalController::class,'submitApplication']);
@@ -39,6 +44,8 @@ $router->post('/customer/documents/upload', [PortalController::class,'uploadDocu
 $router->get('/customer/documents/{id}/download', [PortalController::class,'downloadDocument']);
 $router->post('/customer/documents/{id}/delete', [PortalController::class,'deleteDocument']);
 $router->get('/customer/notifications', [PortalController::class,'notifications']);
+$router->get('/customer/notifications/feed', [PortalController::class,'notificationFeed']);
+$router->post('/customer/notifications/read-all', [PortalController::class,'markAllNotifications']);
 $router->post('/customer/notifications/{id}', [PortalController::class,'notification']);
 $router->get('/customer/billing', [PortalController::class,'billing']);
 $router->get('/customer/billing/invoices', [PortalController::class,'invoices']);
@@ -46,3 +53,5 @@ $router->get('/customer/billing/invoices/{id}', [PortalController::class,'invoic
 $router->post('/customer/billing/invoices/{id}/pay', [PaymentController::class,'payInvoice']);
 $router->get('/customer/billing/payments', [PortalController::class,'payments']);
 $router->get('/customer/activity', [PortalController::class,'activity']);
+$router->get('/customer/support', [PortalController::class,'support']);
+$router->post('/customer/support', [PortalController::class,'submitSupport']);

@@ -17,7 +17,7 @@ class AuthMiddleware
             exit;
         }
 
-        if ($adminOnly && ($user['user_type'] ?? '') !== 'admin') {
+        if ($adminOnly && !in_array(($user['user_type'] ?? ''), ['admin', 'staff'], true)) {
             http_response_code(403);
             exit('403 - Forbidden');
         }
