@@ -229,7 +229,13 @@ final class ModulesController extends AdminController
         if (!isset($this->modules[$module])) {
             $this->abort404();
         }
-        return $this->modules[$module];
+        $definition = $this->modules[$module];
+        if ($module === 'tenders') {
+            foreach ($this->records->tenderTypes() as $type) {
+                $definition['fields']['type']['options'][$type] ??= $type;
+            }
+        }
+        return $definition;
     }
 
     private function validatedData(array $definition): array
@@ -248,7 +254,7 @@ final class ModulesController extends AdminController
             if (isset($field['maxlength']) && mb_strlen($value) > $field['maxlength']) {
                 $errors[$name][] = $field['label'] . ' is too long.';
             }
-            if (isset($field['options']) && $value !== '' && !array_key_exists($value, $field['options'])) {
+            if (isset($field['options']) && !($field['allow_custom'] ?? false) && $value !== '' && !array_key_exists($value, $field['options'])) {
                 $errors[$name][] = $field['label'] . ' contains an invalid value.';
             }
         }

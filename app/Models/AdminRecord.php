@@ -10,6 +10,13 @@ final class AdminRecord extends Model
 {
     protected string $table = 'admin_records';
 
+    public function tenderTypes(): array
+    {
+        $statement = $this->db->query("SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(data, '$.type')) AS type FROM admin_records WHERE module = 'tenders' AND deleted_at IS NULL ORDER BY type");
+        return array_values(array_filter($statement->fetchAll(PDO::FETCH_COLUMN),
+            static fn ($type): bool => is_string($type) && trim($type) !== '' && $type !== 'null'));
+    }
+
     public function paginate(string $module, int $page, int $perPage, string $search = ''): array
     {
         $offset = ($page - 1) * $perPage;

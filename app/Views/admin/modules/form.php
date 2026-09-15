@@ -23,6 +23,8 @@ $action = $isEdit ? '/admin/' . $module . '/update/' . $record['id'] : '/admin/'
                 <label for="<?= htmlspecialchars($name) ?>"><?= htmlspecialchars($field['label']) ?><?= ($field['required'] ?? false) ? ' *' : '' ?></label>
                 <?php if ($field['type'] === 'textarea'): ?>
                     <textarea class="form-control" id="<?= htmlspecialchars($name) ?>" name="<?= htmlspecialchars($name) ?>" rows="6"><?= htmlspecialchars((string) ($values[$name] ?? '')) ?></textarea>
+                <?php elseif ($field['type'] === 'select' && ($field['allow_custom'] ?? false)): ?>
+                    <?php require __DIR__ . '/custom-record-type.php'; ?>
                 <?php elseif ($field['type'] === 'select'): ?>
                     <select class="form-control" id="<?= htmlspecialchars($name) ?>" name="<?= htmlspecialchars($name) ?>">
                         <?php foreach ($field['options'] as $value => $label): ?>

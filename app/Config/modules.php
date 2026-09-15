@@ -36,7 +36,7 @@ return [
     'tenders' => ['title' => 'Tenders & Notices', 'singular' => 'Tender / Notice', 'fields' => [
         'type' => $select('Record Type', [
             'tender' => 'Tender', 'notice' => 'Notice', 'corrigendum' => 'Corrigendum',
-        ]), 'region' => $text('State / Region'), 'invited_by' => $text('Invited By'),
+        ]) + ['allow_custom' => true, 'maxlength' => 60], 'region' => $text('State / Region'), 'invited_by' => $text('Invited By'),
         'title' => $area('Tender / Project Details', true), 'deadline_label' => $date('Last Date / Deadline'),
         'closing_date' => $date('Closing Date (for alerts and sorting)', false),
         'submission_time' => $text('Time', false), 'submission_mode' => $select('Submission Mode', [
